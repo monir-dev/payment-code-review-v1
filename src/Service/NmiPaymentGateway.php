@@ -3,6 +3,8 @@
 namespace App\Service;
 
 use App\Entity\PaymentTransaction;
+use App\Entity\Plan;
+use App\Dto\CreatePlanDto;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use DOMDocument;
@@ -18,6 +20,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class NmiPaymentGateway
 {
     private const NMI_THREE_STEP_URL = 'https://secure.nmi.com/api/v2/three-step';
+    private const NMI_TRANSACT_URL = 'https://secure.nmi.com/api/transact.php';
 
     private EntityManagerInterface $entityManager;
     private LoggerInterface $logger;
@@ -189,6 +192,63 @@ class NmiPaymentGateway
         $childNodeValue = $domDocument->createTextNode($value);
         $childNode->appendChild($childNodeValue);
         $parentNode->appendChild($childNode);
+    }
+
+    public function createPlan(CreatePlanDto $planDto): array
+    {
+        // Use form POST data instead of XML for transact.php endpoint
+        $formData = [
+            'security_key' => $this->nmiApiKey,
+            'recurring' => 'add_plan',
+            'plan_id' => $planDto->planId,
+            'plan_name' => $planDto->planName,
+            'plan_amount' => number_format($planDto->amount, 2, '.', ''),
+            'plan_payments' => '0', // 0 = indefinite
+            'day_frequency' => $planDto->dayFrequency,
+        ];
+
+        try {
+            $response = $this->client->request('POST', self::NMI_TRANSACT_URL, [
+                'body' => http_build_query($formData),
+                'headers' => [
+                    'Content-Type' => 'application/x-www-form-urlencoded'
+                ]
+            ]);
+            $data = $response->getContent();
+
+            // Parse response - NMI returns key=value pairs
+            $responseData = [];
+            parse_str($data, $responseData);
+
+            if (($responseData['response'] ?? '') == '1') {
+                $this->logger->info('Plan created successfully with NMI', [
+                    'plan_id' => $planDto->planId,
+                    'plan_name' => $planDto->planName,
+                    'response' => $responseData['responsetext'] ?? ''
+                ]);
+
+                return [
+                    'status' => 'success',
+                    'message' => $responseData['responsetext'] ?? 'Plan created successfully',
+                ];
+            } else {
+                return [
+                    'status' => 'error',
+                    'message' => $responseData['responsetext'] ?? 'Failed to create plan',
+                ];
+            }
+        } catch (Exception $e) {
+            $this->logger->error('NMI Plan creation API call failed', [
+                'error' => $e->getMessage(),
+                'plan_id' => $planDto->planId,
+                'plan_name' => $planDto->planName,
+            ]);
+
+            return [
+                'status' => 'error',
+                'message' => 'Failed to create plan: ' . $e->getMessage(),
+            ];
+        }
     }
 
     public function processRefund($originalTransactionId, $refundAmount)

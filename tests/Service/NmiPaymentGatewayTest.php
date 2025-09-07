@@ -4,6 +4,7 @@ namespace App\Tests\Service;
 
 use App\Entity\PaymentTransaction;
 use App\Service\NmiPaymentGateway;
+use App\Dto\CreatePlanDto;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -162,5 +163,68 @@ XML;
         $result = $this->paymentGateway->processRefund('123', -10);
         $this->assertEquals('error', $result['status']);
         $this->assertEquals('Refund amount must be positive.', $result['message']);
+    }
+
+    function testCreatePlanSuccess()
+    {
+        // Simulate successful NMI response (form-encoded key=value pairs)
+        $responseBody = 'response=1&responsetext=Plan Added&authcode=&transactionid=&avsresponse=&cvvresponse=&orderid=&type=&response_code=100';
+
+        $response = $this->createMock(ResponseInterface::class);
+        $response->method('getContent')->willReturn($responseBody);
+
+        $this->httpClient->method('request')->willReturn($response);
+
+        $this->logger->expects($this->once())->method('info')
+            ->with('Plan created successfully with NMI', $this->arrayHasKey('plan_id'));
+
+        $planDto = new CreatePlanDto('PLAN_MONTHLY_2999_20231201120000', 'Premium Plan', 29.99, 'monthly', 30);
+
+        $result = $this->paymentGateway->createPlan($planDto);
+
+        $this->assertEquals('success', $result['status']);
+        $this->assertEquals('Plan Added', $result['message']);
+        // Only returns minimal data now
+        $this->assertArrayNotHasKey('plan_id', $result);
+        $this->assertArrayNotHasKey('amount', $result);
+        $this->assertArrayNotHasKey('frequency', $result);
+    }
+
+    function testCreatePlanFailure()
+    {
+        // Simulate failed NMI response
+        $responseBody = 'response=3&responsetext=Invalid plan data&authcode=&transactionid=&avsresponse=&cvvresponse=&orderid=&type=&response_code=300';
+
+        $response = $this->createMock(ResponseInterface::class);
+        $response->method('getContent')->willReturn($responseBody);
+
+        $this->httpClient->method('request')->willReturn($response);
+
+        // Create DTO for test
+        $planDto = new CreatePlanDto('PLAN_MONTHLY_2999_20231201120000', 'Premium Plan', 29.99, 'monthly', 30);
+
+        $result = $this->paymentGateway->createPlan($planDto);
+
+        $this->assertEquals('error', $result['status']);
+        $this->assertEquals('Invalid plan data', $result['message']);
+    }
+
+    function testCreatePlanWithWeeklyFrequency()
+    {
+        $responseBody = 'response=1&responsetext=Plan Added&authcode=&transactionid=&avsresponse=&cvvresponse=&orderid=&type=&response_code=100';
+
+        $response = $this->createMock(ResponseInterface::class);
+        $response->method('getContent')->willReturn($responseBody);
+
+        $this->httpClient->method('request')->willReturn($response);
+
+        $planDto = new CreatePlanDto('PLAN_WEEKLY_1500_20231201120000', 'Basic Weekly Plan', 15.00, 'weekly', 7);
+
+        $result = $this->paymentGateway->createPlan($planDto);
+
+        $this->assertEquals('success', $result['status']);
+        $this->assertEquals('Plan Added', $result['message']);
+        $this->assertArrayNotHasKey('plan_id', $result);
+        $this->assertArrayNotHasKey('amount', $result);
     }
 }

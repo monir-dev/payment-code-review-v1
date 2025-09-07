@@ -1,0 +1,54 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Create Plan{% endblock %}
+
+{% block body %}
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <h1 class="text-center mb-4">Create Subscription Plan</h1>
+
+                {{ form_start(planForm) }}
+                    <div class="card shadow">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-clipboard-list"></i> Plan Details
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                {{ form_label(planForm.planName) }}
+                                {{ form_widget(planForm.planName, {'attr': {'class': 'form-control'}}) }}
+                                {{ form_errors(planForm.planName) }}
+                                {{ form_help(planForm.planName) }}
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form_label(planForm.amount) }}
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        {{ form_widget(planForm.amount, {'attr': {'class': 'form-control'}}) }}
+                                    </div>
+                                    {{ form_errors(planForm.amount) }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form_label(planForm.frequency) }}
+                                    {{ form_widget(planForm.frequency, {'attr': {'class': 'form-select'}}) }}
+                                    {{ form_errors(planForm.frequency) }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-footer">
+                            <div class="d-grid gap-2">
+                                {{ form_widget(planForm.submit, {'attr': {'class': 'btn btn-primary btn-lg'}}) }}
+                                <a href="{{ path('app_plan_list') }}" class="text-center">View All Plans</a>
+                            </div>
+                        </div>
+                    </div>
+                {{ form_end(planForm) }}
+            </div>
+        </div>
+    </div>
+{% endblock %}

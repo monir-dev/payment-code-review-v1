@@ -10,12 +10,13 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
+use PHPUnit\Framework\MockObject\MockObject;
 
-class NmiPaymentGatewayTest extends TestCase
+final class NmiPaymentGatewayTest extends TestCase
 {
-    private $entityManager;
-    private $logger;
-    private $httpClient;
+    private MockObject & EntityManagerInterface $entityManager;
+    private MockObject & LoggerInterface $logger;
+    private MockObject & HttpClientInterface $httpClient;
     private NmiPaymentGateway $paymentGateway;
 
     protected function setUp(): void
@@ -25,7 +26,12 @@ class NmiPaymentGatewayTest extends TestCase
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->httpClient = $this->createMock(HttpClientInterface::class);
-        $this->paymentGateway = new NmiPaymentGateway($this->entityManager, $this->logger, $this->httpClient);
+        $this->paymentGateway = new NmiPaymentGateway(
+            $this->entityManager,
+            $this->logger,
+            $this->httpClient,
+            $_ENV['NMI_API_KEY'] ?? ''
+        );
     }
 
     function test_initialize_payment_success()

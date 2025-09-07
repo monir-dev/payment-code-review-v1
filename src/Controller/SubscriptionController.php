@@ -28,7 +28,11 @@ class SubscriptionController extends AbstractController
     #[Route('/subscription/create', name: 'app_subscription_create')]
     public function createSubscription(Request $request): Response
     {
-        $form = $this->createForm(SubscriptionType::class);
+        $activePlans = $this->planRepository->findActivePlans();
+
+        $form = $this->createForm(SubscriptionType::class, null, [
+            'active_plans' => $activePlans
+        ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {

@@ -4,7 +4,6 @@ namespace App\Form;
 
 use Symfony\Component\Form\AbstractType;
 use App\Entity\Plan;
-use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
@@ -20,16 +19,12 @@ class SubscriptionType extends AbstractType
 {
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
+        $activePlans = $options['active_plans'] ?? [];
+        
         $builder
             ->add('plan', EntityType::class, [
                 'class' => Plan::class,
-                'query_builder' => function (EntityRepository $er) {
-                    return $er->createQueryBuilder('p')
-                        ->where('p.status = :status')
-                        ->setParameter('status', 'active')
-                        ->orderBy('p.frequency', 'ASC')
-                        ->addOrderBy('p.amount', 'ASC');
-                },
+                'choices' => $activePlans,
                 'choice_label' => function (Plan $plan) {
                     return sprintf('$%s %s (every %d days) - %s',
                         number_format($plan->getAmount(), 2),
@@ -136,6 +131,9 @@ class SubscriptionType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
+            'active_plans' => [],
         ]);
+        
+        $resolver->setAllowedTypes('active_plans', 'array');
     }
 }

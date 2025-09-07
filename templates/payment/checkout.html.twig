@@ -9,18 +9,37 @@
         <div class="row">
             <div class="col-md-6">
                 <h3>Payment Information</h3>
+
                 <div class="mb-3">
-                    {{ form_label(checkoutForm.amount) }}
-                    {{ form_widget(checkoutForm.amount, {'attr': {'class': 'form-control'}}) }}
-                    {{ form_errors(checkoutForm.amount) }}
+                    <div class="form-check">
+                        {{ form_widget(checkoutForm.subscribeAndCheckout) }}
+                        {{ form_label(checkoutForm.subscribeAndCheckout) }}
+                    </div>
+                    {{ form_errors(checkoutForm.subscribeAndCheckout) }}
                 </div>
+
+                <div class="mb-3" id="plan-container" style="display: none;">
+                    {{ form_label(checkoutForm.plan) }}
+                    {{ form_widget(checkoutForm.plan) }}
+                    {{ form_errors(checkoutForm.plan) }}
+                </div>
+
+                <div class="mb-3" id="amount-container">
+                    {{ form_label(checkoutForm.amount) }}
+                    {{ form_widget(checkoutForm.amount) }}
+                    {{ form_errors(checkoutForm.amount) }}
+                    <small class="form-text text-muted" id="amount-helper">
+                        Enter the amount for one-time payment, or select a plan above for subscription.
+                    </small>
+                </div>
+
                 <div class="mb-3">
                     {{ form_label(checkoutForm.currency) }}
-                    {{ form_widget(checkoutForm.currency, {'attr': {'class': 'form-control'}}) }}
+                    {{ form_widget(checkoutForm.currency) }}
                     {{ form_errors(checkoutForm.currency) }}
                 </div>
             </div>
-            
+
             <div class="col-md-6">
                 <h3>Billing Information</h3>
                 <div class="row">
@@ -35,19 +54,19 @@
                         {{ form_errors(checkoutForm.billingLastName) }}
                     </div>
                 </div>
-                
+
                 <div class="mb-3">
                     {{ form_label(checkoutForm.billingAddress1) }}
                     {{ form_widget(checkoutForm.billingAddress1, {'attr': {'class': 'form-control'}}) }}
                     {{ form_errors(checkoutForm.billingAddress1) }}
                 </div>
-                
+
                 <div class="mb-3">
                     {{ form_label(checkoutForm.billingAddress2) }}
                     {{ form_widget(checkoutForm.billingAddress2, {'attr': {'class': 'form-control'}}) }}
                     {{ form_errors(checkoutForm.billingAddress2) }}
                 </div>
-                
+
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         {{ form_label(checkoutForm.billingCity) }}
@@ -60,7 +79,7 @@
                         {{ form_errors(checkoutForm.billingState) }}
                     </div>
                 </div>
-                
+
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         {{ form_label(checkoutForm.billingPostal) }}
@@ -73,13 +92,13 @@
                         {{ form_errors(checkoutForm.billingCountry) }}
                     </div>
                 </div>
-                
+
                 <div class="mb-3">
                     {{ form_label(checkoutForm.billingEmail) }}
                     {{ form_widget(checkoutForm.billingEmail, {'attr': {'class': 'form-control'}}) }}
                     {{ form_errors(checkoutForm.billingEmail) }}
                 </div>
-                
+
                 <div class="mb-3">
                     {{ form_label(checkoutForm.billingPhone) }}
                     {{ form_widget(checkoutForm.billingPhone, {'attr': {'class': 'form-control'}}) }}
@@ -87,9 +106,97 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="text-center mt-4">
             {{ form_widget(checkoutForm.submitPayment) }}
         </div>
     {{ form_end(checkoutForm) }}
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+
+            // Get DOM elements with multiple fallback strategies
+            const subscribeCheckbox = document.getElementById('checkout_subscribeAndCheckout');
+            const planContainer = document.getElementById('plan-container');
+            const planSelect = document.getElementById('checkout_plan');
+            const amountInput = document.getElementById('checkout_amount');
+            const amountHelper = document.getElementById('amount-helper');
+
+            // Exit early if required elements don't exist
+            if (!subscribeCheckbox || !planContainer || !planSelect || !amountInput || !amountHelper) {
+                return;
+            }
+
+            function toggleFields() {
+
+                if (subscribeCheckbox && subscribeCheckbox.checked) {
+                    // Show plan selection, hide amount input
+                    if (planContainer) {
+                        planContainer.style.display = 'block';
+                    }
+                    if (planSelect) {
+                        planSelect.style.display = 'block';
+                    }
+                    if (amountInput) {
+                        amountInput.style.display = 'none';
+                        amountInput.required = false;
+                    }
+                    if (amountHelper) {
+                        amountHelper.textContent = 'Amount will be set based on selected plan.';
+                    }
+
+                    // Set amount from selected plan if available
+                    updateAmountFromPlan();
+                } else {
+                    // Hide plan selection, show amount input
+                    if (planContainer) {
+                        planContainer.style.display = 'none';
+                        console.log('Plan container hidden');
+                    }
+                    if (planSelect) {
+                        planSelect.style.display = 'none';
+                        planSelect.value = '';
+                    }
+                    if (amountInput) {
+                        amountInput.style.display = 'block';
+                        amountInput.required = true;
+                        amountInput.value = '';
+                    }
+                    if (amountHelper) {
+                        amountHelper.textContent = 'Enter the amount for one-time payment, or select a plan above for subscription.';
+                    }
+                }
+            }
+
+            function updateAmountFromPlan() {
+                if (!planSelect || !planSelect.options || planSelect.selectedIndex < 0) {
+                    return;
+                }
+
+                const selectedOption = planSelect.options[planSelect.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    // Extract amount from option text (format: "Plan Name - $X.XX frequency")
+                    const optionText = selectedOption.text;
+                    const match = optionText.match(/\$(\d+(?:\.\d{2})?)/);
+                    if (match) {
+                        amountInput.value = parseFloat(match[1]).toFixed(2);
+                    }
+                } else if (subscribeCheckbox && subscribeCheckbox.checked) {
+                    amountInput.value = '';
+                }
+            }
+
+            // Add event listeners only if elements exist
+            if (subscribeCheckbox) {
+                subscribeCheckbox.addEventListener('change', toggleFields);
+            }
+
+            if (planSelect) {
+                planSelect.addEventListener('change', updateAmountFromPlan);
+            }
+
+            // Set initial state
+            toggleFields();
+        });
+    </script>
 {% endblock %}

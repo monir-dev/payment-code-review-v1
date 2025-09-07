@@ -22,10 +22,22 @@ class PlanRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('p')
             ->andWhere('p.status = :status')
             ->setParameter('status', 'active')
-            ->orderBy('p.created_at', 'DESC')
+            ->orderBy('p.plan_name', 'ASC')
             ->getQuery()
             ->getResult();
     }
+
+    public function findActivePlansForSubscription(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->andWhere('p.status = :status')
+            ->setParameter('status', 'active')
+            ->orderBy('p.frequency', 'ASC')
+            ->addOrderBy('p.amount', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
 
     public function findByFrequency(string $frequency): array
     {

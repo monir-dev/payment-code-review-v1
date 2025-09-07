@@ -2,7 +2,10 @@
 
 namespace App\Form;
 
+use App\Entity\Plan;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
@@ -19,20 +22,51 @@ class CheckoutType extends AbstractType
 {
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
+        $activePlans = $options['active_plans'] ?? [];
+        
         $builder
+            ->add('subscribeAndCheckout', CheckboxType::class, [
+                'label' => 'Subscribe and Checkout (for recurring billing)',
+                'required' => false,
+                'attr' => [
+                    'class' => 'form-check-input',
+                    'id' => 'subscribe-checkbox',
+                ],
+                'label_attr' => [
+                    'class' => 'form-check-label',
+                ],
+            ])
+            ->add('plan', EntityType::class, [
+                'class' => Plan::class,
+                'choices' => $activePlans,
+                'choice_label' => function (Plan $plan) {
+                    return sprintf('%s - $%s %s', $plan->getPlanName(), number_format($plan->getAmount(), 2), $plan->getFrequency());
+                },
+                'placeholder' => 'Select a plan...',
+                'required' => false,
+                'attr' => [
+                    'class' => 'form-control',
+                    'id' => 'plan-select',
+                ],
+                'label' => 'Select Plan',
+            ])
             ->add('amount', NumberType::class, [
                 'label' => 'Amount',
                 'scale' => 2,
                 'html5' => true,
+                'required' => false, // Will be conditionally validated via JavaScript
                 'constraints' => [
-                    new NotBlank(),
                     new Positive(),
+                ],
+                'attr' => [
+                    'class' => 'form-control',
+                    'id' => 'amount-input',
                 ],
             ])
             ->add('currency', TextType::class, [
                 'label' => 'Currency (e.g., USD)',
                 'data' => 'USD',
-                'attr' => ['readonly' => true],
+                'attr' => ['readonly' => true, 'class' => 'form-control'],
             ])
             // Billing Information
             ->add('billingFirstName', TextType::class, [
@@ -115,6 +149,9 @@ class CheckoutType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
+            'active_plans' => [],
         ]);
+        
+        $resolver->setAllowedTypes('active_plans', 'array');
     }
 }

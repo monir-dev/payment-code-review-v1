@@ -10,3 +10,19 @@
   - Since the NmiPaymentGateway.php using `https://secure.nmi.com/api/v2/three-step` this url that's why I didn't used the sanbox environment.
   - Fixed existing test by removing deprecation related tags form `phpunit.dist.xml`
 - 
+
+# Planning phase to determine work process
+- Investigate documentation `https://secure.nmi.com/merchants/resources/integration/integration_portal.php?tid=4a0d25146526480a75f81a71f616c04f#3step_methodology` for re-billing flow.
+- Very basic implementation as like the projects existing code.
+- First I will do it separately. then I will merge with current checkout process.
+- Implement Unit/Integration tests
+- Refactor to DDD
+
+# Finding related to re-billing.
+- First I need a subscription plan.
+- When I create subscription, I have to pass plan ID and card information.
+- I can't find any endpoints to get all the plans from the API.
+
+# Steps to follow.
+- Create plan and save it to local database.
+- For now, I will create separate subscription page where I will be able to choose plan.

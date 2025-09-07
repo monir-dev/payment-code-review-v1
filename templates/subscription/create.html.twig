@@ -1,0 +1,134 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Create Subscription{% endblock %}
+
+{% block body %}
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-10 col-lg-8">
+                <h1 class="text-center mb-4">Create New Subscription</h1>
+
+                {{ form_start(subscriptionForm) }}
+
+                    <!-- Subscription Details Card -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-credit-card"></i> Subscription Details
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8 mb-3">
+                                    {{ form_label(subscriptionForm.plan) }}
+                                    {{ form_widget(subscriptionForm.plan, {'attr': {'class': 'form-select'}}) }}
+                                    {{ form_errors(subscriptionForm.plan) }}
+                                    {{ form_help(subscriptionForm.plan) }}
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    {{ form_label(subscriptionForm.start_date) }}
+                                    {{ form_widget(subscriptionForm.start_date, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.start_date) }}
+                                    {{ form_help(subscriptionForm.start_date) }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Customer Information Card -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-user"></i> Customer Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                {{ form_label(subscriptionForm.customer_email) }}
+                                {{ form_widget(subscriptionForm.customer_email, {'attr': {'class': 'form-control'}}) }}
+                                {{ form_errors(subscriptionForm.customer_email) }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Billing Information Card -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-address-card"></i> Billing Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form_label(subscriptionForm.billingFirstName) }}
+                                    {{ form_widget(subscriptionForm.billingFirstName, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billingFirstName) }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form_label(subscriptionForm.billingLastName) }}
+                                    {{ form_widget(subscriptionForm.billingLastName, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billingLastName) }}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                {{ form_label(subscriptionForm.billingAddress1) }}
+                                {{ form_widget(subscriptionForm.billingAddress1, {'attr': {'class': 'form-control'}}) }}
+                                {{ form_errors(subscriptionForm.billingAddress1) }}
+                            </div>
+
+                            <div class="mb-3">
+                                {{ form_label(subscriptionForm.billingAddress2) }}
+                                {{ form_widget(subscriptionForm.billingAddress2, {'attr': {'class': 'form-control'}}) }}
+                                {{ form_errors(subscriptionForm.billingAddress2) }}
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    {{ form_label(subscriptionForm.billingCity) }}
+                                    {{ form_widget(subscriptionForm.billingCity, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billingCity) }}
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    {{ form_label(subscriptionForm.billingState) }}
+                                    {{ form_widget(subscriptionForm.billingState, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billingState) }}
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    {{ form_label(subscriptionForm.billingPostal) }}
+                                    {{ form_widget(subscriptionForm.billingPostal, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billingPostal) }}
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form_label(subscriptionForm.billingCountry) }}
+                                    {{ form_widget(subscriptionForm.billingCountry, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billingCountry) }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form_label(subscriptionForm.billingPhone) }}
+                                    {{ form_widget(subscriptionForm.billingPhone, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billingPhone) }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Section -->
+                    <div class="card shadow">
+                        <div class="card-footer">
+                            <div class="d-grid gap-2">
+                                {{ form_widget(subscriptionForm.submit, {'attr': {'class': 'btn btn-success btn-lg'}}) }}
+                                <a href="{{ path('app_subscription_list') }}" class="text-center">View All Subscriptions</a>
+                            </div>
+                        </div>
+                    </div>
+
+                {{ form_end(subscriptionForm) }}
+            </div>
+        </div>
+    </div>
+{% endblock %}

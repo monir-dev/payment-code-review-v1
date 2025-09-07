@@ -29,6 +29,30 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{{ path('app_refund') }}">Process Refund</a>
                         </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="subscriptionDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-sync-alt"></i> Subscriptions
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="subscriptionDropdown">
+                                <li><a class="dropdown-item" href="{{ path('app_subscription_list') }}">
+                                    <i class="fas fa-list"></i> View All Subscriptions
+                                </a></li>
+                                <li><a class="dropdown-item" href="{{ path('app_subscription_create') }}">
+                                    <i class="fas fa-plus"></i> Create Subscription
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ path('app_plan_create') }}">
+                                    <i class="fas fa-plus-circle"></i> Create Plan
+                                </a></li>
+                                <li><a class="dropdown-item" href="{{ path('app_plan_list') }}">
+                                    <i class="fas fa-list-alt"></i> View All Plans
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ path('app_api_subscriptions') }}" target="_blank">
+                                    <i class="fas fa-code"></i> Subscriptions API
+                                </a></li>
+                            </ul>
+                        </li>
                     </ul>
                 </div>
             </div>

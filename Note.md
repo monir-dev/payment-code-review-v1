@@ -26,3 +26,14 @@
 # Steps to follow.
 - Create plan and save it to local database.
 - For now, I will create separate subscription page where I will be able to choose plan.
+
+# Basic plan, subscription, and re-billing
+- Basic implementation of subscription plan
+- Separate basic implementation of subscription creation and api
+- Re-bill feature inside subscription.
+
+
+# Next Ongoing work...
+- A command for processing all active subscriptions re-bill based on due date
+- Subscribe feature when create a checkout/transaction.
+- Lastly refactor code to DDD.

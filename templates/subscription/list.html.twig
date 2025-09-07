@@ -1,0 +1,215 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Subscriptions{% endblock %}
+
+{% block body %}
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1 class="h2">
+                        <i class="fas fa-sync-alt text-primary"></i>
+                        Subscription Management
+                    </h1>
+                    <a href="{{ path('app_subscription_create') }}" class="btn btn-success">
+                        <i class="fas fa-plus-circle"></i> Create New Subscription
+                    </a>
+                </div>
+
+                {% if subscriptions|length > 0 %}
+                    <div class="row">
+                        {% for subscription in subscriptions %}
+                            <div class="col-lg-6 col-xl-6 mb-4">
+                                <div class="card h-100 {% if subscription.status == 'active' %}border-success{% elseif subscription.status == 'cancelled' %}border-danger{% else %}border-warning{% endif %}">
+                                    <!-- Subscription Header -->
+                                    <div class="card-header {% if subscription.status == 'active' %}bg-success text-white{% elseif subscription.status == 'cancelled' %}bg-danger text-white{% else %}bg-warning text-dark{% endif %}">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <h5 class="card-title mb-1">{{ subscription.plan ? subscription.plan.planName : 'Legacy Subscription' }}</h5>
+                                                <small class="opacity-75">
+                                                    <i class="fas fa-envelope"></i> {{ subscription.customerEmail }}
+                                                </small>
+                                                <br>
+                                                <small class="opacity-75">
+                                                    <i class="fas fa-tag"></i> #{{ subscription.subscriptionId }}
+                                                </small>
+                                            </div>
+                                            <span class="badge {% if subscription.status == 'active' %}bg-light text-success{% elseif subscription.status == 'cancelled' %}bg-light text-danger{% else %}bg-light text-warning{% endif %} ms-2">
+                                                {% if subscription.status == 'active' %}
+                                                    <i class="fas fa-check-circle"></i> Active
+                                                {% elseif subscription.status == 'cancelled' %}
+                                                    <i class="fas fa-times-circle"></i> Cancelled
+                                                {% else %}
+                                                    <i class="fas fa-pause-circle"></i> {{ subscription.status|title }}
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Subscription Body -->
+                                    <div class="card-body">
+                                        <!-- Amount and Frequency -->
+                                        <div class="text-center mb-3">
+                                            <h3 class="text-primary mb-0">
+                                                ${{ subscription.amount|number_format(2) }}
+                                            </h3>
+                                            <small class="text-muted">per {{ subscription.frequency }}</small>
+                                        </div>
+
+                                        <!-- Subscription Details -->
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-6">
+                                                <div class="bg-light p-2 rounded text-center">
+                                                    <small class="text-muted d-block">Plan</small>
+                                                    <strong>{{ subscription.plan ? subscription.plan.planName : 'Legacy' }}</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="bg-light p-2 rounded text-center">
+                                                    <small class="text-muted d-block">Frequency</small>
+                                                    <strong>{{ subscription.frequency|title }}</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Dates -->
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-6">
+                                                <div class="bg-light p-2 rounded text-center">
+                                                    <small class="text-muted d-block">Start Date</small>
+                                                    <strong>{{ subscription.startDate|date('M d, Y') }}</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="bg-light p-2 rounded text-center">
+                                                    <small class="text-muted d-block">
+                                                        {% if subscription.status == 'active' %}Next Charge{% else %}Status{% endif %}
+                                                    </small>
+                                                    <strong>
+                                                        {% if subscription.status == 'active' and subscription.nextChargeDate %}
+                                                            {{ subscription.nextChargeDate|date('M d, Y') }}
+                                                        {% else %}
+                                                            {{ subscription.status|title }}
+                                                        {% endif %}
+                                                    </strong>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Additional Info -->
+                                        {% if subscription.customerVaultId %}
+                                            <div class="bg-light p-2 rounded mb-1">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-user"></i>
+                                                    Customer ID: {{ subscription.customerVaultId }}
+                                                </small>
+                                            </div>
+                                        {% endif %}
+
+                                        <!-- Created Date -->
+                                        <div class="bg-light p-2 rounded mb-3">
+                                            <small class="text-muted">
+                                                <i class="fas fa-calendar-alt"></i>
+                                                Created: {{ subscription.createdAt|date('M d, Y') }}
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <!-- Subscription Actions -->
+                                    <div class="card-footer bg-transparent">
+                                        {% if subscription.status == 'active' %}
+                                            <div class="d-grid gap-2 mb-2">
+                                                <!-- Manual Rebilling Form -->
+                                                <form method="post" action="{{ path('app_subscription_rebill', {id: subscription.id}) }}"
+                                                      onsubmit="return confirm('Process rebilling now?');">
+                                                    <div class="input-group input-group-sm">
+                                                        <span class="input-group-text">$</span>
+                                                        <input type="number" name="amount" step="0.01" min="0.01"
+                                                               class="form-control"
+                                                               placeholder="{{ subscription.amount }}"
+                                                               title="Leave empty to use default amount">
+                                                        <button type="submit" class="btn btn-primary">
+                                                            <i class="fas fa-credit-card"></i> Rebill
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+
+                                            <div class="d-grid">
+                                                <!-- Cancel Subscription -->
+                                                <form method="post" action="{{ path('app_subscription_cancel', {id: subscription.id}) }}"
+                                                      onsubmit="return confirm('Are you sure you want to cancel this subscription?');">
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                                                        <i class="fas fa-ban"></i> Cancel Subscription
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        {% elseif subscription.status == 'cancelled' %}
+                                            <div class="alert alert-secondary mb-0 py-2">
+                                                <small>
+                                                    <i class="fas fa-info-circle"></i>
+                                                    This subscription has been cancelled and no further charges will occur.
+                                                </small>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Summary Stats -->
+                    <div class="row mt-4">
+                        <div class="col-md-4">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <h3 class="text-success">
+                                        {{ subscriptions|filter(s => s.status == 'active')|length }}
+                                    </h3>
+                                    <p class="text-muted mb-0">Active Subscriptions</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-danger">
+                                <div class="card-body text-center">
+                                    <h3 class="text-danger">
+                                        {{ subscriptions|filter(s => s.status == 'cancelled')|length }}
+                                    </h3>
+                                    <p class="text-muted mb-0">Cancelled Subscriptions</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-primary">
+                                <div class="card-body text-center">
+                                    <h3 class="text-primary">
+                                        ${{ subscriptions|filter(s => s.status == 'active')|reduce((carry, s) => carry + s.amount, 0)|number_format(2) }}
+                                    </h3>
+                                    <p class="text-muted mb-0">Monthly Revenue</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                {% else %}
+                    <!-- Empty State -->
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <div class="mb-4">
+                                <i class="fas fa-sync-alt fa-4x text-muted"></i>
+                            </div>
+                            <h3 class="text-muted">No Subscriptions Found</h3>
+                            <p class="text-muted mb-4">
+                                Start by creating your first recurring billing subscription.
+                            </p>
+                            <a href="{{ path('app_subscription_create') }}" class="btn btn-success btn-lg">
+                                <i class="fas fa-plus-circle"></i> Create Your First Subscription
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}

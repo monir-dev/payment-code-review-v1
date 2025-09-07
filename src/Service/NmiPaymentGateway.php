@@ -5,6 +5,8 @@ namespace App\Service;
 use App\Entity\PaymentTransaction;
 use App\Entity\Plan;
 use App\Dto\CreatePlanDto;
+use App\Dto\CreateSubscriptionDto;
+use App\Entity\Subscription;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use DOMDocument;
@@ -247,6 +249,319 @@ class NmiPaymentGateway
             return [
                 'status' => 'error',
                 'message' => 'Failed to create plan: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    private function createCustomerVault(array $billingInfo): array
+    {
+        $formData = [
+            'security_key' => $this->nmiApiKey,
+            'customer_vault' => 'add_customer',
+            // Credit card info - in production this would come from user input
+            'ccnumber' => '4111111111111111',
+            'ccexp' => '1225',
+            'cvv' => '999',
+        ];
+
+        // Add billing info
+        foreach ($billingInfo as $key => $value) {
+            if (!empty($value)) {
+                $formData[$key] = $value;
+            }
+        }
+
+        try {
+            $response = $this->client->request('POST', self::NMI_TRANSACT_URL, [
+                'body' => http_build_query($formData),
+                'headers' => [
+                    'Content-Type' => 'application/x-www-form-urlencoded'
+                ]
+            ]);
+            $data = $response->getContent();
+
+            // Parse response
+            $responseData = [];
+            parse_str($data, $responseData);
+
+            if (($responseData['response'] ?? '') == '1' && !empty($responseData['customer_vault_id'])) {
+                $this->logger->info('Customer vault created successfully', [
+                    'customer_vault_id' => $responseData['customer_vault_id'],
+                    'response' => $responseData['responsetext'] ?? ''
+                ]);
+
+                return [
+                    'status' => 'success',
+                    'customer_vault_id' => $responseData['customer_vault_id'],
+                    'message' => 'Customer vault created successfully',
+                ];
+            } else {
+                $this->logger->warning('Customer vault creation failed', [
+                    'response' => $responseData
+                ]);
+
+                return [
+                    'status' => 'error',
+                    'message' => $responseData['responsetext'] ?? 'Failed to create customer vault',
+                ];
+            }
+        } catch (Exception $e) {
+            $this->logger->error('Customer vault creation exception', [
+                'message' => $e->getMessage()
+            ]);
+
+            return [
+                'status' => 'error',
+                'message' => 'Failed to create customer vault: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    public function createSubscriptionWithPlan(CreateSubscriptionDto $subscriptionDto): array
+    {
+        $billingInfo = [
+            'email' => $subscriptionDto->customerEmail,
+            'first_name' => $subscriptionDto->billingFirstName,
+            'last_name' => $subscriptionDto->billingLastName,
+            'address1' => $subscriptionDto->billingAddress1 ?? '',
+            'address2' => $subscriptionDto->billingAddress2 ?? '',
+            'city' => $subscriptionDto->billingCity ?? '',
+            'state' => $subscriptionDto->billingState ?? '',
+            'postal' => $subscriptionDto->billingPostal,
+            'country' => $subscriptionDto->billingCountry,
+            'phone' => $subscriptionDto->billingPhone ?? '',
+        ];
+
+        $vaultResult = $this->createCustomerVault($billingInfo);
+        if ($vaultResult['status'] !== 'success') {
+            return $vaultResult;
+        }
+
+        $customerVaultId = $vaultResult['customer_vault_id'];
+
+        $formData = [
+            'security_key' => $this->nmiApiKey,
+            'recurring' => 'add_subscription',
+            'plan_id' => $subscriptionDto->getPlanId(),
+            'start_date' => $subscriptionDto->startDate->format('Ymd'),
+            'customer_vault_id' => $customerVaultId,
+        ];
+
+        foreach ($billingInfo as $key => $value) {
+            if (!empty($value)) {
+                $formData[$key] = $value;
+            }
+        }
+
+        try {
+            $response = $this->client->request('POST', self::NMI_TRANSACT_URL, [
+                'body' => http_build_query($formData),
+                'headers' => [
+                    'Content-Type' => 'application/x-www-form-urlencoded'
+                ]
+            ]);
+            $data = $response->getContent();
+
+            $responseData = [];
+            parse_str($data, $responseData);
+
+            if (($responseData['response'] ?? '') == '1') {
+                // Save subscription to local database with plan details
+                $subscription = new Subscription();
+                $subscription->setPlan($subscriptionDto->plan);
+                $subscription->setSubscriptionId($responseData['subscription_id'] ?? '');
+                $subscription->setCustomerVaultId($customerVaultId);
+                $subscription->setAmount($subscriptionDto->getAmount());
+                $subscription->setCurrencyCode('USD');
+                $subscription->setFrequency($subscriptionDto->getFrequency());
+                $subscription->setStartDate($subscriptionDto->startDate);
+                $subscription->setCustomerEmail($subscriptionDto->customerEmail);
+                $subscription->setStatus('active');
+                $subscription->setNextChargeDate($subscriptionDto->getNextChargeDate());
+
+                $this->entityManager->persist($subscription);
+                $this->entityManager->flush();
+
+                $this->logger->info('Subscription created successfully (DTO-based)', [
+                    'step1_customer_vault_id' => $customerVaultId,
+                    'step2_subscription_id' => $responseData['subscription_id'],
+                    'transaction_id' => $responseData['transactionid'] ?? '',
+                    'plan_id' => $subscriptionDto->getPlanId(),
+                    'amount' => $subscriptionDto->getAmount(),
+                    'frequency' => $subscriptionDto->getFrequency(),
+                    'local_subscription_id' => $subscription->getId(),
+                    'customer_email' => $subscriptionDto->customerEmail
+                ]);
+
+                return [
+                    'status' => 'success',
+                    'subscription_id' => $responseData['subscription_id'],
+                    'customer_vault_id' => $customerVaultId,
+                    'transaction_id' => $responseData['transactionid'] ?? '',
+                    'local_subscription_id' => $subscription->getId(),
+                    'plan' => $subscriptionDto->getPlanId(),
+                    'message' => 'Subscription created successfully with plan: ' . $subscriptionDto->plan->getDisplayName() . ' (DTO-based)',
+                ];
+            } else {
+                return [
+                    'status' => 'error',
+                    'message' => $responseData['responsetext'] ?? 'Failed to create subscription',
+                ];
+            }
+        } catch (Exception $e) {
+            $this->logger->error('Subscription creation exception (DTO-based)', [
+                'step' => '2_subscription_creation',
+                'customer_vault_id' => $customerVaultId ?? 'UNKNOWN',
+                'plan_id' => $subscriptionDto->getPlanId(),
+                'customer_email' => $subscriptionDto->customerEmail,
+                'message' => $e->getMessage()
+            ]);
+
+            return [
+                'status' => 'error',
+                'message' => 'Failed to create subscription: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    public function cancelSubscription(string $subscriptionId): array
+    {
+        $formData = [
+            'security_key' => $this->nmiApiKey,
+            'recurring' => 'delete_subscription',
+            'subscription_id' => $subscriptionId,
+        ];
+
+        try {
+            $response = $this->client->request('POST', self::NMI_TRANSACT_URL, [
+                'body' => http_build_query($formData),
+                'headers' => [
+                    'Content-Type' => 'application/x-www-form-urlencoded'
+                ]
+            ]);
+            $data = $response->getContent();
+
+            // Parse response
+            $responseData = [];
+            parse_str($data, $responseData);
+
+            if (($responseData['response'] ?? '') == '1') {
+                $this->logger->info('Subscription cancelled via NMI API', [
+                    'subscription_id' => $subscriptionId,
+                    'response' => $responseData['responsetext'] ?? ''
+                ]);
+
+                return [
+                    'status' => 'success',
+                    'message' => 'Subscription cancelled successfully with NMI',
+                ];
+            } else {
+                // Handle case where subscription was already cancelled in NMI
+                $errorMessage = $responseData['responsetext'] ?? '';
+                if (strpos($errorMessage, 'No recurring subscriptions found') !== false) {
+                    $this->logger->info('Subscription already cancelled in NMI, treating as success', [
+                        'subscription_id' => $subscriptionId,
+                        'response' => $responseData
+                    ]);
+
+                    return [
+                        'status' => 'success',
+                        'message' => 'Subscription was already cancelled (syncing local status)',
+                        'already_cancelled' => true,
+                    ];
+                }
+
+                $this->logger->warning('NMI subscription cancellation failed', [
+                    'subscription_id' => $subscriptionId,
+                    'response' => $responseData
+                ]);
+
+                return [
+                    'status' => 'error',
+                    'message' => $errorMessage ?: 'Failed to cancel subscription with NMI',
+                ];
+            }
+        } catch (Exception $e) {
+            $this->logger->error('Subscription cancellation exception', [
+                'subscription_id' => $subscriptionId,
+                'message' => $e->getMessage()
+            ]);
+
+            return [
+                'status' => 'error',
+                'message' => 'Failed to cancel subscription: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    public function processRebilling(string $subscriptionId, string $customerVaultId, float $amount = null): array
+    {
+        if (empty($customerVaultId)) {
+            return [
+                'status' => 'error',
+                'message' => 'Customer vault ID is required for rebilling. Subscription may need to be recreated.',
+            ];
+        }
+
+        $formData = [
+            'security_key' => $this->nmiApiKey,
+            'type' => 'sale',
+            'customer_vault_id' => $customerVaultId,
+        ];
+
+        if ($amount) {
+            $formData['amount'] = number_format($amount, 2, '.', '');
+        }
+
+        try {
+            $response = $this->client->request('POST', self::NMI_TRANSACT_URL, [
+                'body' => http_build_query($formData),
+                'headers' => [
+                    'Content-Type' => 'application/x-www-form-urlencoded'
+                ]
+            ]);
+            $data = $response->getContent();
+
+            // Parse response
+            $responseData = [];
+            parse_str($data, $responseData);
+
+            if (($responseData['response'] ?? '') == '1') {
+                $this->logger->info('Rebilling processed successfully via customer vault', [
+                    'subscription_id' => $subscriptionId,
+                    'customer_vault_id' => $customerVaultId,
+                    'transaction_id' => $responseData['transactionid'] ?? '',
+                    'amount' => $responseData['amount'] ?? $amount
+                ]);
+
+                return [
+                    'status' => 'success',
+                    'transaction_id' => $responseData['transactionid'] ?? '',
+                    'amount' => (float)($responseData['amount'] ?? $amount ?? 0),
+                    'message' => 'Rebilling processed successfully',
+                ];
+            } else {
+                $this->logger->warning('Rebilling failed via customer vault', [
+                    'subscription_id' => $subscriptionId,
+                    'customer_vault_id' => $customerVaultId,
+                    'response' => $responseData
+                ]);
+
+                return [
+                    'status' => 'declined',
+                    'message' => $responseData['responsetext'] ?? 'Rebilling failed',
+                ];
+            }
+        } catch (Exception $e) {
+            $this->logger->error('Rebilling exception', [
+                'subscription_id' => $subscriptionId,
+                'customer_vault_id' => $customerVaultId,
+                'message' => $e->getMessage()
+            ]);
+
+            return [
+                'status' => 'error',
+                'message' => 'Failed to process rebilling: ' . $e->getMessage(),
             ];
         }
     }

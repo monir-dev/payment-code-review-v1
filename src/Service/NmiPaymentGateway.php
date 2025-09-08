@@ -376,6 +376,7 @@ class NmiPaymentGateway
                 $subscription->setFrequency($subscriptionDto->getFrequency());
                 $subscription->setStartDate($subscriptionDto->startDate);
                 $subscription->setCustomerEmail($subscriptionDto->customerEmail);
+                $subscription->setOriginalTransactionId($subscriptionDto->originalTransactionId);
                 $subscription->setStatus('active');
                 $subscription->setNextChargeDate($subscriptionDto->getNextChargeDate());
 
@@ -586,7 +587,7 @@ class NmiPaymentGateway
         $xml = $this->sendApiRequest($xmlRequest, self::NMI_THREE_STEP_URL);
         $gwResponse = @new SimpleXMLElement((string)$xml);
 
-        if ((string)$gwResponse->{'result'} !== '1') {
+        if ((string)$gwResponse->{'result'} === '1') {
             $this->logger->info(
                 'Refund successful',
                 [
@@ -597,7 +598,7 @@ class NmiPaymentGateway
 
             return ['status' => 'success', 'transaction_id' => (string)$gwResponse->{'transaction-id'}];
         } else {
-            $message = $responseArray['responsetext'] ?? 'Refund failed.';
+            $message = (string)$gwResponse->{'responsetext'} ?? 'Refund failed.';
             $this->logger->warning(
                 'Refund failed',
                 ['response_text' => $message, 'original_transaction_id' => $originalTransactionId],

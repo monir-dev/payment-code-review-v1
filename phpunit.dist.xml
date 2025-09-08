@@ -15,7 +15,7 @@
         <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
-        <server name="DATABASE_URL" value="sqlite:///:memory:" force="true" />
+        <server name="DATABASE_URL" value="sqlite:///var/test.db" force="true" />
     </php>
 
     <testsuites>

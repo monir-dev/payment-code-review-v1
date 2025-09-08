@@ -42,6 +42,18 @@ class SubscriptionRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    public function findByOriginalTransactionId(string $transactionId): array
+    {
+        return $this->createQueryBuilder('s')
+            ->andWhere('s.original_transaction_id = :transactionId')
+            ->andWhere('s.status = :status')
+            ->setParameter('transactionId', $transactionId)
+            ->setParameter('status', 'active')
+            ->orderBy('s.created_at', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
     /**
      * Find subscriptions due for charging
      */

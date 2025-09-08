@@ -26,6 +26,9 @@ class Subscription
     #[ORM\Column(length: 255)]
     private ?string $customer_vault_id = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $original_transaction_id = null;
+
     #[ORM\Column(type: Types::FLOAT)]
     private ?float $amount = null;
 
@@ -98,6 +101,17 @@ class Subscription
     public function setCustomerVaultId(?string $customer_vault_id): static
     {
         $this->customer_vault_id = $customer_vault_id;
+        return $this;
+    }
+
+    public function getOriginalTransactionId(): ?string
+    {
+        return $this->original_transaction_id;
+    }
+
+    public function setOriginalTransactionId(?string $original_transaction_id): static
+    {
+        $this->original_transaction_id = $original_transaction_id;
         return $this;
     }
 

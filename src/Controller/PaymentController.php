@@ -8,6 +8,7 @@ use App\Form\RefundType;
 use App\Form\Step2Type;
 use App\Repository\PaymentTransactionRepository;
 use App\Repository\PlanRepository;
+use App\Repository\SubscriptionRepository;
 use App\Service\NmiPaymentGateway;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,12 +21,18 @@ class PaymentController extends AbstractController
     private NmiPaymentGateway $paymentGateway;
     private LoggerInterface $logger;
     private PlanRepository $planRepository;
+    private SubscriptionRepository $subscriptionRepository;
 
-    public function __construct(NmiPaymentGateway $paymentGateway, LoggerInterface $logger, PlanRepository $planRepository)
-    {
+    public function __construct(
+        NmiPaymentGateway $paymentGateway, 
+        LoggerInterface $logger, 
+        PlanRepository $planRepository,
+        SubscriptionRepository $subscriptionRepository
+    ) {
         $this->paymentGateway = $paymentGateway;
         $this->logger = $logger;
         $this->planRepository = $planRepository;
+        $this->subscriptionRepository = $subscriptionRepository;
     }
 
     #[Route('/checkout', name: 'app_checkout')]
@@ -43,7 +50,7 @@ class PaymentController extends AbstractController
                 $subscriptionData = $request->getSession()->get('subscription_data');
                 if ($subscriptionData) {
                     try {
-                        $this->createSubscriptionFromPayment($subscriptionData, $request);
+                        $this->createSubscriptionFromPayment($subscriptionData, $request, $result['transaction_id']);
                     } catch (\Exception $e) {
                         $this->logger->error('Subscription creation failed after successful payment', [
                             'transaction_id' => $result['transaction_id'],
@@ -160,7 +167,10 @@ class PaymentController extends AbstractController
             );
 
             if ($result['status'] === 'success') {
-                $this->addFlash('success', 'Refund successful! New Transaction ID: ' . $result['transaction_id']);
+                // Cancel related subscriptions
+                $cancelledSubscriptions = $this->cancelSubscriptionsByTransactionId($data['transactionId']);
+                
+                $this->addFlash('success', 'Refund successful! New Transaction ID: ' . $result['transaction_id'] . $cancelledSubscriptions);
                 $this->logger->info('Refund successful', ['transaction_id' => $result['transaction_id']]);
                 return $this->redirectToRoute('app_refund');
             } else {
@@ -200,7 +210,7 @@ class PaymentController extends AbstractController
         );
     }
 
-    private function createSubscriptionFromPayment(array $subscriptionData, Request $request): void
+    private function createSubscriptionFromPayment(array $subscriptionData, Request $request, string $transactionId): void
     {
         // Find the plan
         $plan = $this->planRepository->find($subscriptionData['plan_id']);
@@ -225,6 +235,7 @@ class PaymentController extends AbstractController
             'billingPostal' => $subscriptionData['billing_postal'],
             'billingCountry' => $subscriptionData['billing_country'],
             'billingPhone' => $subscriptionData['billing_phone'],
+            'original_transaction_id' => $transactionId,
         ];
 
         // Create DTO from form data
@@ -248,5 +259,63 @@ class PaymentController extends AbstractController
         } else {
             throw new \Exception('Subscription creation failed: ' . $result['message']);
         }
+    }
+
+    private function cancelSubscriptionsByTransactionId(string $transactionId): string
+    {
+        // Find active subscriptions linked to this transaction
+        $subscriptions = $this->subscriptionRepository->findByOriginalTransactionId($transactionId);
+        
+        if (empty($subscriptions)) {
+            return '';
+        }
+
+        $cancelledCount = 0;
+        $cancelMessage = '';
+
+        foreach ($subscriptions as $subscription) {
+            try {
+                // Cancel subscription via NMI
+                $result = $this->paymentGateway->cancelSubscription($subscription->getSubscriptionId());
+                
+                if ($result['status'] === 'success') {
+                    // Update subscription status in database
+                    $this->subscriptionRepository->cancelSubscription($subscription, true);
+                    $cancelledCount++;
+                    
+                    $this->logger->info('Subscription cancelled due to refund', [
+                        'subscription_id' => $subscription->getSubscriptionId(),
+                        'local_subscription_id' => $subscription->getId(),
+                        'original_transaction_id' => $transactionId,
+                        'customer_email' => $subscription->getCustomerEmail(),
+                        'refund_triggered' => true
+                    ]);
+                } else {
+                    $this->logger->error('Failed to cancel subscription via NMI during refund', [
+                        'subscription_id' => $subscription->getSubscriptionId(),
+                        'local_subscription_id' => $subscription->getId(),
+                        'original_transaction_id' => $transactionId,
+                        'nmi_error' => $result['message'] ?? 'Unknown error',
+                        'refund_triggered' => true
+                    ]);
+                }
+            } catch (\Exception $e) {
+                $this->logger->error('Exception while cancelling subscription during refund', [
+                    'subscription_id' => $subscription->getSubscriptionId(),
+                    'local_subscription_id' => $subscription->getId(),
+                    'original_transaction_id' => $transactionId,
+                    'error' => $e->getMessage(),
+                    'refund_triggered' => true
+                ]);
+            }
+        }
+
+        if ($cancelledCount > 0) {
+            $cancelMessage = sprintf(' %d subscription(s) have been automatically cancelled.', $cancelledCount);
+        } elseif (count($subscriptions) > 0) {
+            $cancelMessage = ' Warning: Some subscriptions could not be cancelled automatically. Please check manually.';
+        }
+
+        return $cancelMessage;
     }
 }

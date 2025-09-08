@@ -18,6 +18,7 @@ final class CreateSubscriptionDto
     public readonly string $billingPostal;
     public readonly string $billingCountry;
     public readonly ?string $billingPhone;
+    public readonly ?string $originalTransactionId;
 
     public function __construct(
         Plan $plan,
@@ -31,7 +32,8 @@ final class CreateSubscriptionDto
         ?string $billingState,
         string $billingPostal,
         string $billingCountry,
-        ?string $billingPhone
+        ?string $billingPhone,
+        ?string $originalTransactionId = null
     ) {
         $this->plan = $plan;
         $this->startDate = $startDate;
@@ -45,6 +47,7 @@ final class CreateSubscriptionDto
         $this->billingPostal = $billingPostal;
         $this->billingCountry = $billingCountry;
         $this->billingPhone = $billingPhone;
+        $this->originalTransactionId = $originalTransactionId;
     }
 
     public static function fromFormData(array $formData): self
@@ -61,7 +64,8 @@ final class CreateSubscriptionDto
             $formData['billingState'] ?? null,
             $formData['billingPostal'],
             $formData['billingCountry'],
-            $formData['billingPhone'] ?? null
+            $formData['billingPhone'] ?? null,
+            $formData['original_transaction_id'] ?? null
         );
     }
 

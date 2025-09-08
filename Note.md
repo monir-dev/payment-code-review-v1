@@ -32,8 +32,12 @@
 - Separate basic implementation of subscription creation and api
 - Re-bill feature inside subscription.
 
-
 # Next Ongoing work...
 - A command for processing all active subscriptions re-bill based on due date
 - Subscribe feature when create a checkout/transaction.
 - Lastly refactor code to DDD.
+
+# Summarizing tasks so far
+- Project full flow works. Codes and tests are not in good shape though.
+- Now I will focus on refactoring.
+

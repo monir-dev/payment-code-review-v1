@@ -6,6 +6,7 @@ namespace App\Application\Service;
 
 use App\Domain\Shared\ValueObject\BillingInformation;
 use App\Dto\CreatePlanDto;
+use DateTimeImmutable;
 
 interface PaymentGatewayInterface
 {
@@ -39,4 +40,30 @@ interface PaymentGatewayInterface
      * @return array{status: string, plan_id?: string, message?: string}
      */
     public function createPlan(CreatePlanDto $planDto): array;
+
+    /**
+     * @param array<string, string> $billingInfo
+     * @return array{status: string, customer_vault_id?: string, message?: string}
+     */
+    public function createCustomerVault(array $billingInfo): array;
+
+    /**
+     * @return array{status: string, message?: string, already_cancelled?: bool}
+     */
+    public function cancelSubscription(string $subscriptionId): array;
+
+    /**
+     * @return array{status: string, transaction_id?: string, amount?: float, message?: string}
+     */
+    public function processRebilling(string $subscriptionId, string $customerVaultId, ?float $amount = null): array;
+
+    /**
+     * @return array{status: string, subscription_id?: string, transaction_id?: string, message?: string}
+     */
+    public function createSubscription(
+        string $planId,
+        string $customerVaultId,
+        DateTimeImmutable $startDate,
+        array $billingInfo = []
+    ): array;
 }

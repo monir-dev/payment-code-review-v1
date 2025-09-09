@@ -1,10 +1,9 @@
 <?php
 
-namespace App\Form;
+namespace App\Presentation\Form;
 
 use Symfony\Component\Form\AbstractType;
-use App\Entity\Plan;
-use Symfony\Bridge\Doctrine\Form\Type\EntityType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
@@ -20,18 +19,12 @@ class SubscriptionType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $activePlans = $options['active_plans'] ?? [];
-        
+
         $builder
-            ->add('plan', EntityType::class, [
-                'class' => Plan::class,
-                'choices' => $activePlans,
-                'choice_label' => function (Plan $plan) {
-                    return sprintf('$%s %s (every %d days) - %s',
-                        number_format($plan->getAmount(), 2),
-                        ucfirst($plan->getFrequency()),
-                        $plan->getDayFrequency(),
-                        $plan->getPlanId()
-                    );
+            ->add('plan_id', ChoiceType::class, [
+                'choices' => $this->buildPlanChoices($activePlans),
+                'choice_label' => function ($choice, $key, $value) {
+                    return $key; // The key is already formatted
                 },
                 'label' => 'Select Plan',
                 'placeholder' => 'Choose a subscription plan...',
@@ -43,7 +36,8 @@ class SubscriptionType extends AbstractType
             ->add('start_date', DateType::class, [
                 'label' => 'Start Date',
                 'widget' => 'single_text',
-                'data' => new \DateTime('+1 day'),
+                'input' => 'datetime_immutable',
+                'data' => new \DateTimeImmutable('+1 day'),
                 'constraints' => [
                     new NotBlank(),
                 ],
@@ -58,56 +52,56 @@ class SubscriptionType extends AbstractType
                 ],
             ])
             // Billing Information
-            ->add('billingFirstName', TextType::class, [
+            ->add('billing_first_name', TextType::class, [
                 'label' => 'First Name',
                 'constraints' => [
                     new NotBlank(),
                     new Length(['max' => 50]),
                 ],
             ])
-            ->add('billingLastName', TextType::class, [
+            ->add('billing_last_name', TextType::class, [
                 'label' => 'Last Name',
                 'constraints' => [
                     new NotBlank(),
                     new Length(['max' => 50]),
                 ],
             ])
-            ->add('billingAddress1', TextType::class, [
+            ->add('billing_address1', TextType::class, [
                 'label' => 'Address',
                 'required' => false,
                 'constraints' => [
                     new Length(['max' => 100]),
                 ],
             ])
-            ->add('billingAddress2', TextType::class, [
+            ->add('billing_address2', TextType::class, [
                 'label' => 'Address 2',
                 'required' => false,
                 'constraints' => [
                     new Length(['max' => 100]),
                 ],
             ])
-            ->add('billingCity', TextType::class, [
+            ->add('billing_city', TextType::class, [
                 'label' => 'City',
                 'required' => false,
                 'constraints' => [
                     new Length(['max' => 50]),
                 ],
             ])
-            ->add('billingState', TextType::class, [
+            ->add('billing_state', TextType::class, [
                 'label' => 'State/Province',
                 'required' => false,
                 'constraints' => [
                     new Length(['max' => 50]),
                 ],
             ])
-            ->add('billingPostal', TextType::class, [
+            ->add('billing_postal', TextType::class, [
                 'label' => 'Zip/Postal Code',
                 'constraints' => [
                     new NotBlank(),
                     new Length(['max' => 20]),
                 ],
             ])
-            ->add('billingCountry', TextType::class, [
+            ->add('billing_country', TextType::class, [
                 'label' => 'Country',
                 'data' => 'US',
                 'constraints' => [
@@ -115,7 +109,7 @@ class SubscriptionType extends AbstractType
                     new Length(['min' => 2, 'max' => 2]),
                 ],
             ])
-            ->add('billingPhone', TextType::class, [
+            ->add('billing_phone', TextType::class, [
                 'label' => 'Phone',
                 'required' => false,
                 'constraints' => [
@@ -133,7 +127,22 @@ class SubscriptionType extends AbstractType
         $resolver->setDefaults([
             'active_plans' => [],
         ]);
-        
+
         $resolver->setAllowedTypes('active_plans', 'array');
+    }
+
+    private function buildPlanChoices(array $plans): array
+    {
+        $choices = [];
+        foreach ($plans as $plan) {
+            $label = sprintf('$%s %s (every %d days) - %s',
+                number_format($plan->getAmount()->getAmount(), 2),
+                ucfirst($plan->getBillingCycle()->getFrequency()),
+                $plan->getBillingCycle()->getDayFrequency(),
+                $plan->getPlanId()->getValue()
+            );
+            $choices[$label] = $plan->getPlanId()->getValue();
+        }
+        return $choices;
     }
 }

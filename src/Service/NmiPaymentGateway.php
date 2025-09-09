@@ -2,11 +2,10 @@
 
 namespace App\Service;
 
+use App\Application\Service\PaymentGatewayInterface;
+use App\Domain\Shared\ValueObject\BillingInformation;
 use App\Entity\PaymentTransaction;
-use App\Entity\Plan;
 use App\Dto\CreatePlanDto;
-use App\Dto\CreateSubscriptionDto;
-use App\Entity\Subscription;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use DOMDocument;
@@ -19,7 +18,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 /**
  * @see https://secure.nmi.com/merchants/resources/integration/integration_portal.php?tid=4a0d25146526480a75f81a71f616c04f#3step_methodology
  */
-class NmiPaymentGateway
+class NmiPaymentGateway implements PaymentGatewayInterface
 {
     private const NMI_THREE_STEP_URL = 'https://secure.nmi.com/api/v2/three-step';
     private const NMI_TRANSACT_URL = 'https://secure.nmi.com/api/transact.php';
@@ -41,10 +40,76 @@ class NmiPaymentGateway
         $this->nmiApiKey = $nmiApiKey;
     }
 
-    /**
-     * Step 1: Initialize payment and get form URL
-     */
+    public function processPayment(
+        string $transactionId,
+        float $amount,
+        string $currency,
+        BillingInformation $billingInformation,
+        ?string $gatewayToken = null
+    ): array {
+        // Convert domain objects to NMI format
+        $billingInfo = [
+            'first_name' => $billingInformation->getFirstName(),
+            'last_name' => $billingInformation->getLastName(),
+            'address1' => $billingInformation->getAddress()->getStreet1(),
+            'address2' => $billingInformation->getAddress()->getStreet2(),
+            'city' => $billingInformation->getAddress()->getCity(),
+            'state' => $billingInformation->getAddress()->getState(),
+            'postal' => $billingInformation->getAddress()->getPostalCode(),
+            'country' => $billingInformation->getAddress()->getCountry(),
+            'phone' => $billingInformation->getPhone(),
+        ];
+
+        if ($gatewayToken) {
+            // Complete an existing payment with token
+            $request = new \stdClass();
+            $request->token_id = $gatewayToken;
+
+            $result = $this->completeTransaction($request);
+
+            return [
+                'status' => $result['status'] === 'success' ? 'success' : 'failed',
+                'transaction_id' => $result['transaction_id'] ?? '',
+                'reason' => $result['decline_message'] ?? $result['error_message'] ?? ''
+            ];
+        } else {
+            // Initialize new payment
+            $result = $this->initializePaymentLegacy($amount, $currency, null, $billingInfo, []);
+
+            return [
+                'status' => $result['status'] === 'success' ? 'success' : 'failed',
+                'reason' => $result['message'] ?? ''
+            ];
+        }
+    }
+
     public function initializePayment(
+        float $amount,
+        string $currency,
+        string $redirectUrl,
+        BillingInformation $billingInformation
+    ): array {
+        // Convert domain object to array format
+        $billingInfo = [
+            'first-name' => $billingInformation->getFirstName(),
+            'last-name' => $billingInformation->getLastName(),
+            'email' => $billingInformation->getEmail()->getValue(),
+            'address1' => $billingInformation->getAddress()->getStreet1(),
+            'address2' => $billingInformation->getAddress()->getStreet2(),
+            'city' => $billingInformation->getAddress()->getCity(),
+            'state' => $billingInformation->getAddress()->getState(),
+            'postal' => $billingInformation->getAddress()->getPostalCode(),
+            'country' => $billingInformation->getAddress()->getCountry(),
+            'phone' => $billingInformation->getPhone()
+        ];
+
+        return $this->initializePaymentLegacy($amount, $currency, $redirectUrl, $billingInfo, []);
+    }
+
+    /**
+     * Step 1: Initialize payment and get form URL (Legacy method)
+     */
+    public function initializePaymentLegacy(
         $amount,
         $currency = 'USD',
         $redirectUrl = null,
@@ -253,7 +318,7 @@ class NmiPaymentGateway
         }
     }
 
-    private function createCustomerVault(array $billingInfo): array
+    public function createCustomerVault(array $billingInfo): array
     {
         $formData = [
             'security_key' => $this->nmiApiKey,
@@ -317,36 +382,21 @@ class NmiPaymentGateway
         }
     }
 
-    public function createSubscriptionWithPlan(CreateSubscriptionDto $subscriptionDto): array
-    {
-        $billingInfo = [
-            'email' => $subscriptionDto->customerEmail,
-            'first_name' => $subscriptionDto->billingFirstName,
-            'last_name' => $subscriptionDto->billingLastName,
-            'address1' => $subscriptionDto->billingAddress1 ?? '',
-            'address2' => $subscriptionDto->billingAddress2 ?? '',
-            'city' => $subscriptionDto->billingCity ?? '',
-            'state' => $subscriptionDto->billingState ?? '',
-            'postal' => $subscriptionDto->billingPostal,
-            'country' => $subscriptionDto->billingCountry,
-            'phone' => $subscriptionDto->billingPhone ?? '',
-        ];
-
-        $vaultResult = $this->createCustomerVault($billingInfo);
-        if ($vaultResult['status'] !== 'success') {
-            return $vaultResult;
-        }
-
-        $customerVaultId = $vaultResult['customer_vault_id'];
-
+    public function createSubscription(
+        string $planId,
+        string $customerVaultId,
+        \DateTimeImmutable $startDate,
+        array $billingInfo = []
+    ): array {
         $formData = [
             'security_key' => $this->nmiApiKey,
             'recurring' => 'add_subscription',
-            'plan_id' => $subscriptionDto->getPlanId(),
-            'start_date' => $subscriptionDto->startDate->format('Ymd'),
+            'plan_id' => $planId,
+            'start_date' => $startDate->format('Ymd'),
             'customer_vault_id' => $customerVaultId,
         ];
 
+        // Add billing information if provided
         foreach ($billingInfo as $key => $value) {
             if (!empty($value)) {
                 $formData[$key] = $value;
@@ -362,59 +412,41 @@ class NmiPaymentGateway
             ]);
             $data = $response->getContent();
 
+            // Parse response
             $responseData = [];
             parse_str($data, $responseData);
 
             if (($responseData['response'] ?? '') == '1') {
-                // Save subscription to local database with plan details
-                $subscription = new Subscription();
-                $subscription->setPlan($subscriptionDto->plan);
-                $subscription->setSubscriptionId($responseData['subscription_id'] ?? '');
-                $subscription->setCustomerVaultId($customerVaultId);
-                $subscription->setAmount($subscriptionDto->getAmount());
-                $subscription->setCurrencyCode('USD');
-                $subscription->setFrequency($subscriptionDto->getFrequency());
-                $subscription->setStartDate($subscriptionDto->startDate);
-                $subscription->setCustomerEmail($subscriptionDto->customerEmail);
-                $subscription->setOriginalTransactionId($subscriptionDto->originalTransactionId);
-                $subscription->setStatus('active');
-                $subscription->setNextChargeDate($subscriptionDto->getNextChargeDate());
-
-                $this->entityManager->persist($subscription);
-                $this->entityManager->flush();
-
-                $this->logger->info('Subscription created successfully (DTO-based)', [
-                    'step1_customer_vault_id' => $customerVaultId,
-                    'step2_subscription_id' => $responseData['subscription_id'],
+                $this->logger->info('Subscription created successfully via NMI API', [
+                    'plan_id' => $planId,
+                    'customer_vault_id' => $customerVaultId,
+                    'subscription_id' => $responseData['subscription_id'] ?? '',
                     'transaction_id' => $responseData['transactionid'] ?? '',
-                    'plan_id' => $subscriptionDto->getPlanId(),
-                    'amount' => $subscriptionDto->getAmount(),
-                    'frequency' => $subscriptionDto->getFrequency(),
-                    'local_subscription_id' => $subscription->getId(),
-                    'customer_email' => $subscriptionDto->customerEmail
+                    'start_date' => $startDate->format('Y-m-d')
                 ]);
 
                 return [
                     'status' => 'success',
-                    'subscription_id' => $responseData['subscription_id'],
-                    'customer_vault_id' => $customerVaultId,
+                    'subscription_id' => $responseData['subscription_id'] ?? '',
                     'transaction_id' => $responseData['transactionid'] ?? '',
-                    'local_subscription_id' => $subscription->getId(),
-                    'plan' => $subscriptionDto->getPlanId(),
-                    'message' => 'Subscription created successfully with plan: ' . $subscriptionDto->plan->getDisplayName() . ' (DTO-based)',
+                    'message' => 'Subscription created successfully with NMI',
                 ];
             } else {
+                $this->logger->warning('NMI subscription creation failed', [
+                    'plan_id' => $planId,
+                    'customer_vault_id' => $customerVaultId,
+                    'response' => $responseData
+                ]);
+
                 return [
                     'status' => 'error',
-                    'message' => $responseData['responsetext'] ?? 'Failed to create subscription',
+                    'message' => $responseData['responsetext'] ?? 'Failed to create subscription with NMI',
                 ];
             }
         } catch (Exception $e) {
-            $this->logger->error('Subscription creation exception (DTO-based)', [
-                'step' => '2_subscription_creation',
-                'customer_vault_id' => $customerVaultId ?? 'UNKNOWN',
-                'plan_id' => $subscriptionDto->getPlanId(),
-                'customer_email' => $subscriptionDto->customerEmail,
+            $this->logger->error('Subscription creation exception', [
+                'plan_id' => $planId,
+                'customer_vault_id' => $customerVaultId,
                 'message' => $e->getMessage()
             ]);
 
@@ -567,7 +599,7 @@ class NmiPaymentGateway
         }
     }
 
-    public function processRefund($originalTransactionId, $refundAmount)
+    public function processRefund(string $originalTransactionId, float $refundAmount): array
     {
         if ($refundAmount <= 0) {
             return ['status' => 'error', 'message' => 'Refund amount must be positive.'];

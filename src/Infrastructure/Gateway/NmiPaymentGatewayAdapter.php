@@ -144,6 +144,108 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
         }
     }
 
+    public function createCustomerVault(array $billingInfo): array
+    {
+        try {
+            $result = $this->nmiGateway->createCustomerVault($billingInfo);
+            
+            return [
+                'status' => $result['status'],
+                'customer_vault_id' => $result['customer_vault_id'] ?? '',
+                'message' => $result['message'] ?? ''
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error('Customer vault creation gateway error', [
+                'billing_info' => $billingInfo,
+                'error' => $e->getMessage()
+            ]);
+            
+            return [
+                'status' => 'error',
+                'message' => 'Customer vault creation failed: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    public function cancelSubscription(string $subscriptionId): array
+    {
+        try {
+            $result = $this->nmiGateway->cancelSubscription($subscriptionId);
+
+            return [
+                'status' => $result['status'],
+                'message' => $result['message'] ?? '',
+                'already_cancelled' => $result['already_cancelled'] ?? false
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error('Subscription cancellation gateway error', [
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'status' => 'error',
+                'message' => 'Subscription cancellation failed: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    public function processRebilling(string $subscriptionId, string $customerVaultId, ?float $amount = null): array
+    {
+        try {
+            $result = $this->nmiGateway->processRebilling($subscriptionId, $customerVaultId, $amount);
+
+            return [
+                'status' => $result['status'],
+                'transaction_id' => $result['transaction_id'] ?? '',
+                'amount' => $result['amount'] ?? $amount,
+                'message' => $result['message'] ?? ''
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error('Rebilling gateway error', [
+                'subscription_id' => $subscriptionId,
+                'customer_vault_id' => $customerVaultId,
+                'amount' => $amount,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'status' => 'error',
+                'message' => 'Rebilling failed: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    public function createSubscription(
+        string $planId,
+        string $customerVaultId,
+        \DateTimeImmutable $startDate,
+        array $billingInfo = []
+    ): array {
+        try {
+            $result = $this->nmiGateway->createSubscription($planId, $customerVaultId, $startDate, $billingInfo);
+
+            return [
+                'status' => $result['status'],
+                'subscription_id' => $result['subscription_id'] ?? '',
+                'transaction_id' => $result['transaction_id'] ?? '',
+                'message' => $result['message'] ?? ''
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error('Subscription creation gateway error', [
+                'plan_id' => $planId,
+                'customer_vault_id' => $customerVaultId,
+                'start_date' => $startDate->format('Y-m-d'),
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'status' => 'error',
+                'message' => 'Subscription creation failed: ' . $e->getMessage()
+            ];
+        }
+    }
+
     private function convertBillingInformationToArray(BillingInformation $billing): array
     {
         $address = $billing->getAddress();

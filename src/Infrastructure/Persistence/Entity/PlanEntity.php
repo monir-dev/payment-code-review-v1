@@ -94,6 +94,18 @@ class PlanEntity
         $this->frequency = $frequency;
     }
 
+    public function __toString(): string
+    {
+        return sprintf(
+            'Plan[id=%s, planId=%s, name=%s, amount=%.2f, frequency=%s]',
+            $this->id ?? 'null',
+            $this->planId ?? 'null',
+            $this->planName ?? 'null',
+            $this->amount ?? 0,
+            $this->frequency ?? 'null'
+        );
+    }
+
     public function getDayFrequency(): int
     {
         return $this->dayFrequency;

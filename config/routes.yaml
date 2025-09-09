@@ -3,3 +3,10 @@ controllers:
         path: ../src/Controller/
         namespace: App\Controller
     type: attribute
+
+# DDD Controllers (New Architecture)
+ddd_controllers:
+    resource:
+        path: ../src/Presentation/Controller/
+        namespace: App\Presentation\Controller
+    type: attribute

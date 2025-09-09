@@ -1,12 +1,15 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Create Plan{% endblock %}
+{% block title %}Create Plan - DDD{% endblock %}
 
 {% block body %}
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-md-8 col-lg-6">
-                <h1 class="text-center mb-4">Create Subscription Plan</h1>
+                <h1 class="text-center mb-4">
+                    <i class="fas fa-plus-circle text-primary"></i>
+                    Create Subscription Plan (DDD)
+                </h1>
 
                 {{ form_start(planForm) }}
                     <div class="card shadow">
@@ -43,11 +46,28 @@
                         <div class="card-footer">
                             <div class="d-grid gap-2">
                                 {{ form_widget(planForm.submit, {'attr': {'class': 'btn btn-primary btn-lg'}}) }}
-                                <a href="{{ path('app_plan_list') }}" class="text-center">View All Plans</a>
+                                <a href="{{ path('app_plan_index') }}" class="text-center">View All Plans</a>
                             </div>
                         </div>
                     </div>
                 {{ form_end(planForm) }}
+
+                <!-- Success/Error Messages -->
+                {% for message in app.flashes('plan_success') %}
+                    <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                        <i class="fas fa-check-circle"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+
+                {% for message in app.flashes('plan_error') %}
+                    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                        <i class="fas fa-exclamation-circle"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
             </div>
         </div>
     </div>

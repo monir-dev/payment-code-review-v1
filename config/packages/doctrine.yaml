@@ -24,6 +24,13 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Entity'
                 prefix: 'App\Entity'
                 alias: App
+            # DDD Infrastructure Entities
+            DddInfrastructure:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Infrastructure/Persistence/Entity'
+                prefix: 'App\Infrastructure\Persistence\Entity'
+                alias: DddInfrastructure
         controller_resolver:
             auto_mapping: false
 

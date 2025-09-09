@@ -1,0 +1,148 @@
+# DDD Infrastructure Services Configuration
+services:
+    # Entity Mappers
+    App\Infrastructure\Persistence\PaymentEntityMapper:
+        arguments: []
+
+    App\Infrastructure\Persistence\PlanEntityMapper:
+        arguments: []
+
+    App\Infrastructure\Persistence\SubscriptionEntityMapper:
+        arguments:
+            - '@App\Infrastructure\Persistence\PlanEntityMapper'
+
+    # Domain Repositories (Infrastructure Implementation)
+    App\Domain\Payment\Repository\PaymentRepositoryInterface:
+        class: App\Infrastructure\Repository\DoctrinePaymentRepository
+        arguments:
+            - '@doctrine'
+            - '@App\Infrastructure\Persistence\PaymentEntityMapper'
+            - '@App\Infrastructure\Event\DomainEventPublisher'
+
+    App\Domain\Billing\Repository\PlanRepositoryInterface:
+        class: App\Infrastructure\Repository\PlanRepository
+        arguments:
+            - '@doctrine'
+            - '@App\Infrastructure\Persistence\PlanEntityMapper'
+            - '@App\Infrastructure\Event\DomainEventPublisher'
+            - '@App\Infrastructure\Event\EventListenerRegistry'
+
+    App\Domain\Subscription\Repository\SubscriptionRepositoryInterface:
+        class: App\Infrastructure\Repository\DoctrineSubscriptionRepository
+        arguments:
+            - '@doctrine'
+            - '@App\Infrastructure\Persistence\SubscriptionEntityMapper'
+            - '@App\Infrastructure\Event\DomainEventPublisher'
+
+    # Application Services
+    App\Application\Service\PaymentGatewayInterface:
+        class: App\Infrastructure\Gateway\NmiPaymentGatewayAdapter
+        arguments:
+            - '@App\Service\NmiPaymentGateway'  # Existing NMI service
+            - '@logger'
+
+    # Command Handlers
+    App\Application\Handler\ProcessPaymentCommandHandler:
+        arguments:
+            - '@App\Domain\Payment\Repository\PaymentRepositoryInterface'
+            - '@App\Application\Service\PaymentGatewayInterface'
+        tags: ['app.command_handler']
+
+    App\Application\Handler\CreateSubscriptionCommandHandler:
+        arguments:
+            - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'
+            - '@App\Domain\Billing\Repository\PlanRepositoryInterface'
+        tags: ['app.command_handler']
+
+    App\Application\Handler\CreatePlanCommandHandler:
+        arguments:
+            - '@App\Domain\Billing\Repository\PlanRepositoryInterface'
+            - '@App\Application\Service\PaymentGatewayInterface'
+        tags: ['app.command_handler']
+
+    App\Application\Handler\TogglePlanStatusCommandHandler:
+        arguments:
+            - '@App\Domain\Billing\Repository\PlanRepositoryInterface'
+            - '@logger'
+        tags: ['app.command_handler']
+
+    # Query Handlers
+    App\Application\Handler\GetActivePlansQueryHandler:
+        arguments:
+            - '@App\Domain\Billing\Repository\PlanRepositoryInterface'
+        tags: ['app.query_handler']
+
+    App\Application\Handler\GetTransactionHistoryQueryHandler:
+        arguments:
+            - '@App\Domain\Payment\Repository\PaymentRepositoryInterface'
+        tags: ['app.query_handler']
+
+    App\Application\Handler\GetSubscriptionsByCustomerEmailQueryHandler:
+        arguments:
+            - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'
+        tags: ['app.query_handler']
+
+    App\Application\Handler\GetPaymentByTransactionIdQueryHandler:
+        arguments:
+            - '@App\Domain\Payment\Repository\PaymentRepositoryInterface'
+        tags: ['app.query_handler']
+
+    # Event Bus and Listeners
+    App\Infrastructure\Event\DomainEventBus:
+        arguments:
+            - '@logger'
+
+    App\Infrastructure\Event\DomainEventPublisher:
+        arguments:
+            - '@App\Infrastructure\Event\DomainEventBus'
+
+    App\Infrastructure\Event\PaymentEventListener:
+        arguments:
+            - '@logger'
+        tags: ['app.event_listener']
+
+    App\Infrastructure\Event\SubscriptionEventListener:
+        arguments:
+            - '@logger'
+        tags: ['app.event_listener']
+
+    App\Infrastructure\Event\PlanEventListener:
+        arguments:
+            - '@logger'
+        tags: ['app.event_listener']
+
+    App\Infrastructure\Event\EventListenerRegistry:
+        arguments:
+            - '@App\Infrastructure\Event\DomainEventBus'
+            - '@App\Infrastructure\Event\PaymentEventListener'
+            - '@App\Infrastructure\Event\SubscriptionEventListener'
+            - '@App\Infrastructure\Event\PlanEventListener'
+            - '@logger'
+        lazy: false  # Force eager loading to ensure listeners are registered
+
+    # Controllers (Presentation Layer)
+    App\Presentation\Controller\PaymentController:
+        arguments:
+            - '@App\Application\Handler\ProcessPaymentCommandHandler'
+            - '@App\Application\Handler\CreateSubscriptionCommandHandler'
+            - '@App\Service\NmiPaymentGateway'
+            - '@logger'
+            - '@App\Repository\PlanRepository'
+            - '@App\Repository\SubscriptionRepository'
+        tags: ['controller.service_arguments']
+
+    App\Presentation\Controller\SubscriptionController:
+        arguments:
+            - '@App\Application\Handler\CreateSubscriptionCommandHandler'
+            - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'
+            - '@App\Domain\Billing\Repository\PlanRepositoryInterface'
+            - '@logger'
+        tags: ['controller.service_arguments']
+
+    App\Presentation\Controller\PlanController:
+        arguments:
+            - '@App\Application\Handler\CreatePlanCommandHandler'
+            - '@App\Application\Handler\TogglePlanStatusCommandHandler'
+            - '@App\Domain\Billing\Repository\PlanRepositoryInterface'
+            - '@logger'
+        tags: ['controller.service_arguments']

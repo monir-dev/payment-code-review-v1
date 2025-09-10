@@ -3,15 +3,15 @@
 namespace App\Service;
 
 use App\Application\Service\PaymentGatewayInterface;
+use App\Domain\Payment\Event\RebillTransactionCompletedEvent;
+use App\Domain\Payment\Event\TransactionCompletedEvent;
 use App\Domain\Shared\ValueObject\BillingInformation;
-use App\Entity\PaymentTransaction;
 use App\Dto\CreatePlanDto;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Infrastructure\Event\DomainEventBus;
 use Psr\Log\LoggerInterface;
 use DOMDocument;
 use SimpleXMLElement;
 use Exception;
-use Symfony\Component\Uid\Uuid;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -23,20 +23,20 @@ class NmiPaymentGateway implements PaymentGatewayInterface
     private const NMI_THREE_STEP_URL = 'https://secure.nmi.com/api/v2/three-step';
     private const NMI_TRANSACT_URL = 'https://secure.nmi.com/api/transact.php';
 
-    private EntityManagerInterface $entityManager;
     private LoggerInterface $logger;
     private HttpClientInterface $client;
+    private DomainEventBus $eventBus;
     private string $nmiApiKey;
 
     public function __construct(
-        EntityManagerInterface $entityManager,
         LoggerInterface $paymentLogger,
         HttpClientInterface $client,
+        DomainEventBus $eventBus,
         string $nmiApiKey,
     ) {
-        $this->entityManager = $entityManager;
         $this->logger = $paymentLogger;
         $this->client = $client;
+        $this->eventBus = $eventBus;
         $this->nmiApiKey = $nmiApiKey;
     }
 
@@ -89,7 +89,6 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         string $redirectUrl,
         BillingInformation $billingInformation
     ): array {
-        // Convert domain object to array format
         $billingInfo = [
             'first-name' => $billingInformation->getFirstName(),
             'last-name' => $billingInformation->getLastName(),
@@ -182,7 +181,7 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         return $this->completeTransactionByTokenId($tokenId);
     }
 
-    public function completeTransactionByTokenId(string $tokenId): array
+    public function completeTransactionByTokenId(string $tokenId, ?string $subscriptionId = null): array
     {
         $xmlRequest = new DOMDocument('1.0', 'UTF-8');
         $xmlRequest->formatOutput = true;
@@ -200,24 +199,22 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         $gwResponse = @new SimpleXMLElement($data);
 
         if ((string)$gwResponse->result == 1) {
-            // Save transaction
-            $transaction = new PaymentTransaction();
-            $transaction->setCreatedAt(new \DateTime());
-            $transaction->setUuid(Uuid::v4());
-            $transaction->setUsedToken((string)$gwResponse->{'token-id'});
-            $transaction->setTransactionId((string)$gwResponse->{'transaction-id'});
-            $transaction->setAmount((float)$gwResponse->{'amount'});
-            $transaction->setCurrencyCode((string)$gwResponse->{'currency'} ?: 'USD');
-            $transaction->setPaymentStatus('Approved');
-            $transaction->setLast4Digits(substr((string)$gwResponse->billing->{'cc-number'}, -4));
-            $this->entityManager->persist($transaction);
-            $this->entityManager->flush();
+            $transactionId = (string)$gwResponse->{'transaction-id'};
 
-            $this->logger->info('Payment successful', ['transaction_id' => (string)$gwResponse->{'transaction-id'}]);
+            // Publish transaction completed event instead of direct database operations
+            $event = TransactionCompletedEvent::fromNmiResponse([
+                'transaction-id' => $transactionId,
+                'amount' => (string)$gwResponse->{'amount'},
+                'currency' => (string)$gwResponse->{'currency'} ?: 'USD',
+                'token-id' => (string)$gwResponse->{'token-id'},
+                'billing' => ['cc-number' => (string)$gwResponse->billing->{'cc-number'}]
+            ], $subscriptionId);
+
+            $this->eventBus->publish($event);
 
             return [
                 'status' => 'success',
-                'transaction_id' => (string)$gwResponse->{'transaction-id'},
+                'transaction_id' => $transactionId,
                 'response' => $gwResponse,
             ];
         } elseif ((string)$gwResponse->result == 2) {
@@ -565,17 +562,30 @@ class NmiPaymentGateway implements PaymentGatewayInterface
             parse_str($data, $responseData);
 
             if (($responseData['response'] ?? '') == '1') {
-                $this->logger->info('Rebilling processed successfully via customer vault', [
+                $transactionId = $responseData['transactionid'] ?? '';
+                $processedAmount = (float)($responseData['amount'] ?? $amount ?? 0);
+
+                // Publish rebill transaction event instead of direct database operations
+                if ($transactionId) {
+                    $event = RebillTransactionCompletedEvent::fromNmiRebillResponse([
+                        'transactionid' => $transactionId,
+                        'amount' => (string)$processedAmount
+                    ], $subscriptionId);
+
+                    $this->eventBus->publish($event);
+                }
+
+                $this->logger->info('Rebilling processed successfully - event published for database persistence', [
                     'subscription_id' => $subscriptionId,
                     'customer_vault_id' => $customerVaultId,
-                    'transaction_id' => $responseData['transactionid'] ?? '',
-                    'amount' => $responseData['amount'] ?? $amount
+                    'transaction_id' => $transactionId,
+                    'amount' => $processedAmount
                 ]);
 
                 return [
                     'status' => 'success',
-                    'transaction_id' => $responseData['transactionid'] ?? '',
-                    'amount' => (float)($responseData['amount'] ?? $amount ?? 0),
+                    'transaction_id' => $transactionId,
+                    'amount' => $processedAmount,
                     'message' => 'Rebilling processed successfully',
                 ];
             } else {
@@ -644,4 +654,5 @@ class NmiPaymentGateway implements PaymentGatewayInterface
             return ['status' => 'error', 'message' => $message];
         }
     }
+
 }

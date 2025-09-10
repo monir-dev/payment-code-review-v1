@@ -13,7 +13,7 @@ services:
 
     # Domain Repositories (Infrastructure Implementation)
     App\Domain\Payment\Repository\PaymentRepositoryInterface:
-        class: App\Infrastructure\Repository\DoctrinePaymentRepository
+        class: App\Infrastructure\Repository\PaymentRepository
         arguments:
             - '@doctrine'
             - '@App\Infrastructure\Persistence\PaymentEntityMapper'
@@ -28,7 +28,7 @@ services:
             - '@App\Infrastructure\Event\EventListenerRegistry'
 
     App\Domain\Subscription\Repository\SubscriptionRepositoryInterface:
-        class: App\Infrastructure\Repository\DoctrineSubscriptionRepository
+        class: App\Infrastructure\Repository\SubscriptionRepository
         arguments:
             - '@doctrine'
             - '@App\Infrastructure\Persistence\SubscriptionEntityMapper'
@@ -66,6 +66,35 @@ services:
             - '@logger'
         tags: ['app.command_handler']
 
+    App\Application\Handler\InitializePaymentCommandHandler:
+        arguments:
+            - '@App\Application\Service\PaymentGatewayInterface'
+            - '@logger'
+        tags: ['app.command_handler']
+
+    App\Application\Handler\CompletePaymentCommandHandler:
+        arguments:
+            - '@App\Service\NmiPaymentGateway'
+            - '@App\Infrastructure\Event\DomainEventBus'
+            - '@App\Application\Handler\CreateSubscriptionCommandHandler'
+            - '@logger'
+        tags: ['app.command_handler']
+
+    App\Application\Handler\ProcessRefundCommandHandler:
+        arguments:
+            - '@App\Application\Service\PaymentGatewayInterface'
+            - '@App\Infrastructure\Event\DomainEventBus'
+            - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'
+            - '@App\Application\Handler\CancelSubscriptionCommandHandler'
+            - '@logger'
+        tags: ['app.command_handler']
+
+    # Application Services
+    App\Application\Service\PaymentSessionService:
+        arguments:
+            - '@request_stack'
+        tags: ['app.application_service']
+
     # Query Handlers
     App\Application\Handler\GetActivePlansQueryHandler:
         arguments:
@@ -74,7 +103,8 @@ services:
 
     App\Application\Handler\GetTransactionHistoryQueryHandler:
         arguments:
-            - '@App\Domain\Payment\Repository\PaymentRepositoryInterface'
+            - '@App\Repository\PaymentTransactionRepository'
+            - '@logger'
         tags: ['app.query_handler']
 
     App\Application\Handler\GetSubscriptionsByCustomerEmailQueryHandler:
@@ -111,6 +141,14 @@ services:
             - '@logger'
         tags: ['app.event_listener']
 
+    App\Infrastructure\Event\PaymentCompletedEventListener:
+        arguments:
+            - '@App\Application\Handler\CreateSubscriptionCommandHandler'
+            - '@logger'
+        tags: ['app.event_listener']
+        lazy: true
+
+
     App\Infrastructure\Event\EventListenerRegistry:
         arguments:
             - '@App\Infrastructure\Event\DomainEventBus'
@@ -123,12 +161,15 @@ services:
     # Controllers (Presentation Layer)
     App\Presentation\Controller\PaymentController:
         arguments:
-            - '@App\Application\Handler\ProcessPaymentCommandHandler'
-            - '@App\Application\Handler\CreateSubscriptionCommandHandler'
-            - '@App\Service\NmiPaymentGateway'
+            - '@App\Application\Handler\CancelSubscriptionCommandHandler'
+            - '@App\Application\Handler\InitializePaymentCommandHandler'
+            - '@App\Application\Handler\CompletePaymentCommandHandler'
+            - '@App\Application\Handler\ProcessRefundCommandHandler'
+            - '@App\Application\Handler\GetTransactionHistoryQueryHandler'
+            - '@App\Application\Service\PaymentSessionService'
             - '@logger'
-            - '@App\Repository\PlanRepository'
-            - '@App\Repository\SubscriptionRepository'
+            - '@App\Infrastructure\Repository\PlanRepository'
+            - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'
         tags: ['controller.service_arguments']
 
     App\Presentation\Controller\SubscriptionController:

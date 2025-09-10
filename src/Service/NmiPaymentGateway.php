@@ -179,6 +179,11 @@ class NmiPaymentGateway implements PaymentGatewayInterface
     public function completeTransaction($request)
     {
         $tokenId = $request->get('token-id');
+        return $this->completeTransactionByTokenId($tokenId);
+    }
+
+    public function completeTransactionByTokenId(string $tokenId): array
+    {
         $xmlRequest = new DOMDocument('1.0', 'UTF-8');
         $xmlRequest->formatOutput = true;
         $xmlCompleteTransaction = $xmlRequest->createElement('complete-action');

@@ -91,6 +91,7 @@ services:
             - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'
             - '@App\Application\Handler\CancelSubscriptionCommandHandler'
             - '@App\Repository\PaymentTransactionRepository'
+            - '@App\Domain\Payment\Service\RefundProcessingService'
             - '@logger'
         tags: ['app.command_handler']
 
@@ -105,6 +106,10 @@ services:
             - '@App\Repository\PaymentTransactionRepository'
             - '@logger'
         tags: ['app.application_service']
+
+    # Domain Services
+    App\Domain\Payment\Service\RefundProcessingService:
+        tags: ['app.domain_service']
 
     # Query Handlers
     App\Application\Handler\GetActivePlansQueryHandler:

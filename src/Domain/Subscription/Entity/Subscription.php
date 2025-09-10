@@ -71,7 +71,7 @@ final class Subscription
         if (!$this->status->canBeCancelled()) {
             throw new DomainException(
                 sprintf(
-                    'Subscription cannot be cancelled. Current status is "%s" but only "active" or "paused" subscriptions can be cancelled.',
+                    'Subscription cannot be cancelled. Current status is "%s" but only "active" subscriptions can be cancelled.',
                     $this->status->getValue()
                 )
             );
@@ -81,14 +81,6 @@ final class Subscription
         $this->recordEvent(new SubscriptionCancelledEvent($this->subscriptionId, $reason));
     }
 
-    public function pause(): void
-    {
-        if (!$this->status->isActive()) {
-            throw new DomainException('Only active subscriptions can be paused');
-        }
-
-        $this->status = SubscriptionStatus::paused();
-    }
 
     public function processRebill(Money $amount, string $transactionId, string $reason = 'Manual rebill', ?DateTimeImmutable $processedAt = null): void
     {

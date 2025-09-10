@@ -9,15 +9,11 @@ use InvalidArgumentException;
 final class SubscriptionStatus
 {
     private const ACTIVE = 'active';
-    private const PAUSED = 'paused';
     private const CANCELLED = 'cancelled';
-    private const EXPIRED = 'expired';
 
     private const VALID_STATUSES = [
         self::ACTIVE,
-        self::PAUSED,
         self::CANCELLED,
-        self::EXPIRED,
     ];
 
     public function __construct(
@@ -33,19 +29,9 @@ final class SubscriptionStatus
         return new self(self::ACTIVE);
     }
 
-    public static function paused(): self
-    {
-        return new self(self::PAUSED);
-    }
-
     public static function cancelled(): self
     {
         return new self(self::CANCELLED);
-    }
-
-    public static function expired(): self
-    {
-        return new self(self::EXPIRED);
     }
 
     public static function fromString(string $status): self
@@ -63,34 +49,27 @@ final class SubscriptionStatus
         return $this->status === self::ACTIVE;
     }
 
-    public function isPaused(): bool
-    {
-        return $this->status === self::PAUSED;
-    }
-
     public function isCancelled(): bool
     {
         return $this->status === self::CANCELLED;
     }
 
-    public function isExpired(): bool
-    {
-        return $this->status === self::EXPIRED;
-    }
-
     public function canBeCancelled(): bool
     {
-        return $this->isActive() || $this->isPaused();
-    }
-
-    public function canBeReactivated(): bool
-    {
-        return $this->isPaused();
+        return $this->isActive();
     }
 
     public function equals(SubscriptionStatus $other): bool
     {
         return $this->status === $other->status;
+    }
+
+    /**
+     * Get all valid subscription status values
+     */
+    public static function getAllValidStatuses(): array
+    {
+        return self::VALID_STATUSES;
     }
 
     public function __toString(): string

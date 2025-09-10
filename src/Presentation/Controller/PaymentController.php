@@ -4,46 +4,34 @@ declare(strict_types=1);
 
 namespace App\Presentation\Controller;
 
-use App\Application\Command\ProcessPaymentCommand;
-use App\Application\Command\CreateSubscriptionCommand;
 use App\Application\Command\InitializePaymentCommand;
 use App\Application\Command\CompletePaymentCommand;
-use App\Application\Handler\ProcessPaymentCommandHandler;
-use App\Application\Handler\CreateSubscriptionCommandHandler;
+use App\Application\Command\ProcessRefundCommand;
+use App\Application\Query\GetTransactionHistoryQuery;
 use App\Application\Handler\InitializePaymentCommandHandler;
 use App\Application\Handler\CompletePaymentCommandHandler;
+use App\Application\Handler\ProcessRefundCommandHandler;
+use App\Application\Handler\GetTransactionHistoryQueryHandler;
 use App\Application\Service\PaymentSessionService;
 use App\Presentation\Form\CheckoutType;
 use App\Presentation\Form\RefundType;
 use App\Presentation\Form\Step2Type;
-use App\Repository\PaymentTransactionRepository;
 use App\Infrastructure\Repository\PlanRepository;
-use App\Service\NmiPaymentGateway;
-use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
-use App\Domain\Subscription\Repository\SubscriptionRepositoryInterface;
-use App\Domain\Subscription\ValueObject\SubscriptionId;
-use App\Application\Handler\CancelSubscriptionCommandHandler;
-use App\Application\Command\CancelSubscriptionCommand;
-use App\Domain\Shared\ValueObject\BillingInformation;
-use App\Domain\Shared\ValueObject\Email;
-use App\Domain\Shared\ValueObject\Address;
+
 
 class PaymentController extends AbstractController
 {
     public function __construct(
-        private readonly CreateSubscriptionCommandHandler $createSubscriptionHandler,
-        private readonly CancelSubscriptionCommandHandler $cancelSubscriptionHandler,
         private readonly InitializePaymentCommandHandler $initializePaymentHandler,
         private readonly CompletePaymentCommandHandler $completePaymentHandler,
+        private readonly ProcessRefundCommandHandler $processRefundHandler,
+        private readonly GetTransactionHistoryQueryHandler $getTransactionHistoryHandler,
         private readonly PaymentSessionService $paymentSessionService,
-        private readonly NmiPaymentGateway $paymentGateway,
-        private readonly LoggerInterface $logger,
         private readonly PlanRepository $planRepository,
-        private readonly SubscriptionRepositoryInterface $subscriptionRepository,
     ) {
     }
 
@@ -52,23 +40,19 @@ class PaymentController extends AbstractController
     {
         // Handle token-id from Step 3 (Payment Callback) - DDD Approach
         if ($tokenId = $request->query->get('token-id')) {
-            // Get session data before processing payment
             $sessionData = $this->paymentSessionService->getPaymentSessionData();
-            
+
             $completePaymentCommand = new CompletePaymentCommand(
                 tokenId: $tokenId,
                 paymentAmount: $sessionData['payment_amount'],
                 subscriptionData: $sessionData['subscription_data']
             );
-            
+
             $result = $this->completePaymentHandler->handle($completePaymentCommand);
 
             if ($result['status'] === 'success') {
                 $this->addFlash('success', 'Payment successful! Transaction ID: ' . $result['transaction_id']);
-                // Clear session data after successful processing
                 $this->paymentSessionService->clearPaymentSessionData();
-                // Note: Subscription creation is now handled by PaymentCompletedEventListener
-                // automatically via domain events - no manual subscription creation needed here
             } elseif ($result['status'] === 'declined') {
                 $this->addFlash('danger', 'Payment declined: ' . ($result['decline_message'] ?? 'Payment declined'));
             } else {
@@ -91,7 +75,7 @@ class PaymentController extends AbstractController
 
             // Determine the amount based on subscription vs one-time payment
             $amount = $data['amount'];
-            
+
             if ($data['subscribeAndCheckout'] && isset($data['plan_id']) && $data['plan_id'] !== null) {
                 // Get amount from selected plan by finding the plan with matching ID
                 $selectedPlan = null;
@@ -101,7 +85,7 @@ class PaymentController extends AbstractController
                         break;
                     }
                 }
-                
+
                 if ($selectedPlan) {
                     $amount = $selectedPlan->getAmount()->getAmount();
                 } else {
@@ -185,7 +169,7 @@ class PaymentController extends AbstractController
                         'billing_phone' => $data['billingPhone'] ?? '',
                     ];
                 }
-                
+
                 $this->paymentSessionService->storePaymentSessionData($amount, $subscriptionData);
 
                 // Create Step 2 form with the NMI form URL as action
@@ -217,21 +201,18 @@ class PaymentController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             $data = $form->getData();
 
-            $result = $this->paymentGateway->processRefund(
-                $data['transactionId'],
-                $data['refundAmount']
+            $processRefundCommand = new ProcessRefundCommand(
+                transactionId: $data['transactionId'],
+                refundAmount: $data['refundAmount']
             );
 
-            if ($result['status'] === 'success') {
-                // Cancel related subscriptions using DDD approach
-                $cancelledSubscriptions = $this->cancelSubscriptionsByTransactionId($data['transactionId']);
+            $result = $this->processRefundHandler->handle($processRefundCommand);
 
-                $this->addFlash('success', 'Refund successful! New Transaction ID: ' . $result['transaction_id'] . $cancelledSubscriptions);
-                $this->logger->info('Refund successful', ['transaction_id' => $result['transaction_id']]);
+            if ($result['status'] === 'success') {
+                $this->addFlash('success', 'Refund successful! New Transaction ID: ' . $result['transaction_id'] . '. Related subscriptions will be cancelled automatically.');
                 return $this->redirectToRoute('app_refund');
             } else {
-                $this->addFlash('danger', 'Refund failed: ' . $result['message']);
-                $this->logger->error('Refund failed', ['message' => $result['message']]);
+                $this->addFlash('danger', 'Refund failed: ' . ($result['message'] ?? 'Unknown error'));
                 return $this->redirectToRoute('app_refund');
             }
         }
@@ -242,97 +223,18 @@ class PaymentController extends AbstractController
     }
 
     #[Route('/api/transactions', name: 'app_payment_history', methods: ['GET'])]
-    public function getTransactions(Request $request, PaymentTransactionRepository $repository): Response
+    public function getTransactions(Request $request): Response
     {
-        $transactions = $repository->by($request);
-        $transactionData = [];
+        $getTransactionHistoryQuery = new GetTransactionHistoryQuery(
+            transactionId: $request->query->get('transaction-id')
+        );
 
-        foreach ($transactions as $transaction) {
-            $transactionData[] = [
-                'uuid' => $transaction->getUuid(),
-                'transaction_id' => $transaction->getTransactionId(),
-                'amount' => $transaction->getAmount(),
-                'currency_code' => $transaction->getCurrencyCode(),
-                'payment_status' => $transaction->getPaymentStatus(),
-                'last4_digits' => $transaction->getLast4Digits(),
-                'created_at' => $transaction->getCreatedAt()?->format('Y-m-d H:i:s'),
-            ];
-        }
+        $transactionData = $this->getTransactionHistoryHandler->handle($getTransactionHistoryQuery);
 
         return new Response(
             json_encode($transactionData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             Response::HTTP_OK,
             ['Content-Type' => 'application/json'],
         );
-    }
-
-
-    private function cancelSubscriptionsByTransactionId(string $transactionId): string
-    {
-        // Find subscriptions by transaction ID using DDD repository
-        $subscriptions = $this->subscriptionRepository->findByOriginalTransactionId(
-            \App\Domain\Payment\ValueObject\TransactionId::fromString($transactionId)
-        );
-
-        if (empty($subscriptions)) {
-            return '';
-        }
-
-        $cancelledCount = 0;
-        $cancelMessage = '';
-
-        foreach ($subscriptions as $subscription) {
-            try {
-                // Use DDD command handler to cancel subscription
-                $cancelCommand = new CancelSubscriptionCommand(
-                    subscriptionId: $subscription->getSubscriptionId()->getValue(),
-                    reason: 'Payment refund - automatic cancellation',
-                    cancelWithGateway: true,
-                    cancelledBy: 'system:refund-process'
-                );
-
-                $result = $this->cancelSubscriptionHandler->handle($cancelCommand);
-
-                if ($result['gateway_cancelled']) {
-                    $cancelledCount++;
-
-
-
-
-                    $this->logger->info('Subscription cancelled due to refund via DDD', [
-                        'subscription_id' => $subscription->getSubscriptionId()->getValue(),
-                        'original_transaction_id' => $transactionId,
-                        'customer_email' => $subscription->getBillingInformation()->getEmail()->getValue(),
-                        'refund_triggered' => true,
-                        'method' => 'ddd-command-handler'
-                    ]);
-                } else {
-                    $this->logger->warning('Failed to cancel subscription during refund via DDD', [
-                        'subscription_id' => $subscription->getSubscriptionId()->getValue(),
-                        'original_transaction_id' => $transactionId,
-                        'gateway_result' => $result['gateway_result'],
-                        'refund_triggered' => true,
-                        'method' => 'ddd-command-handler'
-                    ]);
-                }
-
-            } catch (\Exception $e) {
-                $this->logger->error('Exception while cancelling subscription during refund via DDD', [
-                    'subscription_id' => $subscription->getSubscriptionId()->getValue(),
-                    'original_transaction_id' => $transactionId,
-                    'error' => $e->getMessage(),
-                    'refund_triggered' => true,
-                    'method' => 'ddd-command-handler'
-                ]);
-            }
-        }
-
-        if ($cancelledCount > 0) {
-            $cancelMessage = sprintf(' %d subscription(s) have been automatically cancelled via DDD.', $cancelledCount);
-        } elseif (count($subscriptions) > 0) {
-            $cancelMessage = ' Warning: Some subscriptions could not be cancelled automatically. Please check manually.';
-        }
-
-        return $cancelMessage;
     }
 }

@@ -37,7 +37,7 @@ final class RebillSubscriptionCommandHandler
 
             // 2. Determine the amount to rebill
             $planAmount = $subscription->getPlan()->getAmount();
-            $rebillAmount = $command->customAmount 
+            $rebillAmount = $command->customAmount
                 ? Money::fromFloat($command->customAmount, $planAmount->getCurrency()->getCode())
                 : $planAmount;
 
@@ -127,7 +127,6 @@ final class RebillSubscriptionCommandHandler
             );
 
         } catch (InvalidArgumentException $e) {
-            // Re-throw validation errors as-is
             $this->logger->error('Subscription rebill validation error', [
                 'subscription_id' => $command->subscriptionId,
                 'error' => $e->getMessage()
@@ -136,11 +135,9 @@ final class RebillSubscriptionCommandHandler
             throw $e;
 
         } catch (\Exception $e) {
-            // Unexpected errors
             $this->logger->error('Unexpected error during subscription rebill', [
                 'subscription_id' => $command->subscriptionId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'error' => $e->getMessage()
             ]);
 
             throw new \RuntimeException(

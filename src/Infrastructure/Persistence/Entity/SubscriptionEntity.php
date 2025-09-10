@@ -23,44 +23,9 @@ class SubscriptionEntity
     #[ORM\JoinColumn(name: 'plan_id', referencedColumnName: 'id', nullable: false)]
     private PlanEntity $plan;
 
-    #[ORM\Column(type: Types::STRING, length: 255)]
-    private string $customerEmail;
-
-    #[ORM\Column(type: Types::STRING, length: 255)]
-    private string $billingFirstName;
-
-    #[ORM\Column(type: Types::STRING, length: 255)]
-    private string $billingLastName;
-
-    #[ORM\Column(type: Types::STRING, length: 255)]
-    private string $billingStreet1;
-
-    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
-    private ?string $billingStreet2 = null;
-
-    #[ORM\Column(type: Types::STRING, length: 255)]
-    private string $billingCity;
-
-    #[ORM\Column(type: Types::STRING, length: 255)]
-    private string $billingState;
-
-    #[ORM\Column(type: Types::STRING, length: 20)]
-    private string $billingPostalCode;
-
-    #[ORM\Column(type: Types::STRING, length: 255)]
-    private string $billingCountry;
-
-    #[ORM\Column(type: Types::STRING, length: 20, nullable: true)]
-    private ?string $billingPhone = null;
-
-    #[ORM\Column(type: Types::FLOAT)]
-    private float $amount;
-
-    #[ORM\Column(type: Types::STRING, length: 50)]
-    private string $frequency;
-
-    #[ORM\Column(type: Types::STRING, length: 50)]
-    private string $currencyCode = 'USD';
+    #[ORM\ManyToOne(targetEntity: CustomerEntity::class)]
+    #[ORM\JoinColumn(name: 'customer_vault_id', referencedColumnName: 'customer_vault_id', nullable: false)]
+    private CustomerEntity $customer;
 
     #[ORM\Column(type: Types::STRING, length: 20)]
     private string $status = 'active';
@@ -73,9 +38,6 @@ class SubscriptionEntity
 
     #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
     private ?string $customerVaultId = null;
-
-    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
-    private ?string $originalTransactionId = null;
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
@@ -116,134 +78,81 @@ class SubscriptionEntity
         $this->plan = $plan;
     }
 
-    public function getCustomerEmail(): string
+    public function getCustomer(): CustomerEntity
     {
-        return $this->customerEmail;
+        return $this->customer;
     }
 
-    public function setCustomerEmail(string $customerEmail): void
+    public function setCustomer(CustomerEntity $customer): void
     {
-        $this->customerEmail = $customerEmail;
+        $this->customer = $customer;
+    }
+
+    // These methods delegate to the customer relationship for backward compatibility
+    public function getCustomerEmail(): string
+    {
+        return $this->customer->getEmail();
     }
 
     public function getBillingFirstName(): string
     {
-        return $this->billingFirstName;
-    }
-
-    public function setBillingFirstName(string $billingFirstName): void
-    {
-        $this->billingFirstName = $billingFirstName;
+        return $this->customer->getFirstName();
     }
 
     public function getBillingLastName(): string
     {
-        return $this->billingLastName;
-    }
-
-    public function setBillingLastName(string $billingLastName): void
-    {
-        $this->billingLastName = $billingLastName;
+        return $this->customer->getLastName();
     }
 
     public function getBillingStreet1(): string
     {
-        return $this->billingStreet1;
-    }
-
-    public function setBillingStreet1(string $billingStreet1): void
-    {
-        $this->billingStreet1 = $billingStreet1;
+        return $this->customer->getStreet1();
     }
 
     public function getBillingStreet2(): ?string
     {
-        return $this->billingStreet2;
-    }
-
-    public function setBillingStreet2(?string $billingStreet2): void
-    {
-        $this->billingStreet2 = $billingStreet2;
+        return $this->customer->getStreet2();
     }
 
     public function getBillingCity(): string
     {
-        return $this->billingCity;
-    }
-
-    public function setBillingCity(string $billingCity): void
-    {
-        $this->billingCity = $billingCity;
+        return $this->customer->getCity();
     }
 
     public function getBillingState(): string
     {
-        return $this->billingState;
-    }
-
-    public function setBillingState(string $billingState): void
-    {
-        $this->billingState = $billingState;
+        return $this->customer->getState();
     }
 
     public function getBillingPostalCode(): string
     {
-        return $this->billingPostalCode;
-    }
-
-    public function setBillingPostalCode(string $billingPostalCode): void
-    {
-        $this->billingPostalCode = $billingPostalCode;
+        return $this->customer->getPostalCode();
     }
 
     public function getBillingCountry(): string
     {
-        return $this->billingCountry;
-    }
-
-    public function setBillingCountry(string $billingCountry): void
-    {
-        $this->billingCountry = $billingCountry;
+        return $this->customer->getCountry();
     }
 
     public function getBillingPhone(): ?string
     {
-        return $this->billingPhone;
+        return $this->customer->getPhone();
     }
 
-    public function setBillingPhone(?string $billingPhone): void
-    {
-        $this->billingPhone = $billingPhone;
-    }
-
+    // These fields are now retrieved from the related plan
     public function getAmount(): float
     {
-        return $this->amount;
-    }
-
-    public function setAmount(float $amount): void
-    {
-        $this->amount = $amount;
+        return $this->plan->getAmount();
     }
 
     public function getFrequency(): string
     {
-        return $this->frequency;
-    }
-
-    public function setFrequency(string $frequency): void
-    {
-        $this->frequency = $frequency;
+        return $this->plan->getFrequency();
     }
 
     public function getCurrencyCode(): string
     {
-        return $this->currencyCode;
-    }
-
-    public function setCurrencyCode(string $currencyCode): void
-    {
-        $this->currencyCode = $currencyCode;
+        return $this->plan->getCurrencyCode();
     }
 
     public function getStatus(): string
@@ -284,16 +193,6 @@ class SubscriptionEntity
     public function setCustomerVaultId(?string $customerVaultId): void
     {
         $this->customerVaultId = $customerVaultId;
-    }
-
-    public function getOriginalTransactionId(): ?string
-    {
-        return $this->originalTransactionId;
-    }
-
-    public function setOriginalTransactionId(?string $originalTransactionId): void
-    {
-        $this->originalTransactionId = $originalTransactionId;
     }
 
     public function getCreatedAt(): \DateTimeImmutable

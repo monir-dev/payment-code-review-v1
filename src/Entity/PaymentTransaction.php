@@ -39,6 +39,9 @@ class PaymentTransaction
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTime $createdAt;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $subscription_id = null;
+
     public function __construct()
     {
         $this->uuid = uniqid('', true); // Generate a unique identifier
@@ -142,5 +145,22 @@ class PaymentTransaction
     public function setCreatedAt(?\DateTime $createdAt): void
     {
         $this->createdAt = $createdAt;
+    }
+
+    public function getSubscriptionId(): ?string
+    {
+        return $this->subscription_id;
+    }
+
+    public function setSubscriptionId(?string $subscription_id): static
+    {
+        $this->subscription_id = $subscription_id;
+
+        return $this;
+    }
+
+    public function isOneTimePayment(): bool
+    {
+        return $this->subscription_id === null;
     }
 }

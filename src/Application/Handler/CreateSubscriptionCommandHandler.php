@@ -8,7 +8,6 @@ use App\Application\Command\CreateSubscriptionCommand;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Billing\Repository\PlanRepositoryInterface;
 use App\Domain\Billing\ValueObject\PlanId;
-use App\Domain\Payment\ValueObject\TransactionId;
 use App\Domain\Shared\ValueObject\Address;
 use App\Domain\Shared\ValueObject\BillingInformation;
 use App\Domain\Shared\ValueObject\Email;
@@ -29,10 +28,9 @@ final class CreateSubscriptionCommandHandler
 
     public function handle(CreateSubscriptionCommand $command): array
     {
-        // Find the plan
         $planId = PlanId::fromString($command->planId);
         $plan = $this->planRepository->findByPlanId($planId);
-        
+
         if (!$plan) {
             throw new InvalidArgumentException('Plan not found: ' . $command->planId);
         }
@@ -41,7 +39,6 @@ final class CreateSubscriptionCommandHandler
             throw new InvalidArgumentException('Plan is not available for subscription: ' . $command->planId);
         }
 
-        // Create value objects
         $email = Email::fromString($command->customerEmail);
         $address = Address::create(
             $command->street1,
@@ -61,7 +58,7 @@ final class CreateSubscriptionCommandHandler
 
         // Get or create customer vault ID following legacy procedure
         $customerVaultId = $command->customerVaultId;
-        
+
         if (!$customerVaultId) {
             // Create customer vault via NMI gateway (following legacy pattern)
             $billingInfo = [
@@ -75,21 +72,21 @@ final class CreateSubscriptionCommandHandler
                 'country' => $command->country,
                 'phone' => $command->phone ?? '',
             ];
-            
+
             $vaultResult = $this->paymentGateway->createCustomerVault($billingInfo);
-            
+
             if ($vaultResult['status'] !== 'success') {
                 throw new InvalidArgumentException(
                     'Failed to create customer vault: ' . ($vaultResult['message'] ?? 'Unknown error')
                 );
             }
-            
+
             $customerVaultId = $vaultResult['customer_vault_id'];
         }
 
         // Create subscription with NMI API
         $startDate = $command->startDate ?? new DateTimeImmutable();
-        
+
         $billingInfo = [
             'email' => $command->customerEmail,
             'first_name' => $command->firstName,
@@ -123,17 +120,13 @@ final class CreateSubscriptionCommandHandler
 
         // Create subscription aggregate with NMI subscription ID
         $subscriptionId = SubscriptionId::fromString($nmiSubscriptionId);
-        $originalTransactionId = $command->originalTransactionId 
-            ? TransactionId::fromString($command->originalTransactionId)
-            : null;
 
         $subscription = Subscription::create(
             $subscriptionId,
             $plan,
             $billingInformation,
             $startDate,
-            $customerVaultId,
-            $originalTransactionId
+            $customerVaultId
         );
 
         // Save subscription

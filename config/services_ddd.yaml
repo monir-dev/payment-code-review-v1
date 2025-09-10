@@ -7,9 +7,14 @@ services:
     App\Infrastructure\Persistence\PlanEntityMapper:
         arguments: []
 
+    App\Infrastructure\Persistence\CustomerEntityMapper:
+        # CustomerEntityMapper has no dependencies
+
     App\Infrastructure\Persistence\SubscriptionEntityMapper:
         arguments:
             - '@App\Infrastructure\Persistence\PlanEntityMapper'
+            - '@App\Infrastructure\Persistence\CustomerEntityMapper'
+            - '@doctrine.orm.entity_manager'
 
     # Domain Repositories (Infrastructure Implementation)
     App\Domain\Payment\Repository\PaymentRepositoryInterface:
@@ -25,7 +30,6 @@ services:
             - '@doctrine'
             - '@App\Infrastructure\Persistence\PlanEntityMapper'
             - '@App\Infrastructure\Event\DomainEventPublisher'
-            - '@App\Infrastructure\Event\EventListenerRegistry'
 
     App\Domain\Subscription\Repository\SubscriptionRepositoryInterface:
         class: App\Infrastructure\Repository\SubscriptionRepository
@@ -76,7 +80,7 @@ services:
         arguments:
             - '@App\Service\NmiPaymentGateway'
             - '@App\Infrastructure\Event\DomainEventBus'
-            - '@App\Application\Handler\CreateSubscriptionCommandHandler'
+            - '@App\Infrastructure\Event\EventListenerRegistry'
             - '@logger'
         tags: ['app.command_handler']
 
@@ -86,6 +90,7 @@ services:
             - '@App\Infrastructure\Event\DomainEventBus'
             - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'
             - '@App\Application\Handler\CancelSubscriptionCommandHandler'
+            - '@App\Repository\PaymentTransactionRepository'
             - '@logger'
         tags: ['app.command_handler']
 
@@ -93,6 +98,12 @@ services:
     App\Application\Service\PaymentSessionService:
         arguments:
             - '@request_stack'
+        tags: ['app.application_service']
+
+    App\Application\Service\TransactionLinkingService:
+        arguments:
+            - '@App\Repository\PaymentTransactionRepository'
+            - '@logger'
         tags: ['app.application_service']
 
     # Query Handlers
@@ -144,9 +155,22 @@ services:
     App\Infrastructure\Event\PaymentCompletedEventListener:
         arguments:
             - '@App\Application\Handler\CreateSubscriptionCommandHandler'
+            - '@App\Application\Service\TransactionLinkingService'
             - '@logger'
         tags: ['app.event_listener']
         lazy: true
+
+    App\Infrastructure\Event\TransactionCompletedEventHandler:
+        arguments:
+            - '@App\Repository\PaymentTransactionRepository'
+            - '@logger'
+        tags: ['app.event_listener']
+
+    App\Infrastructure\Event\RebillTransactionCompletedEventHandler:
+        arguments:
+            - '@App\Repository\PaymentTransactionRepository'
+            - '@logger'
+        tags: ['app.event_listener']
 
 
     App\Infrastructure\Event\EventListenerRegistry:
@@ -155,7 +179,9 @@ services:
             - '@App\Infrastructure\Event\PaymentEventListener'
             - '@App\Infrastructure\Event\SubscriptionEventListener'
             - '@App\Infrastructure\Event\PlanEventListener'
-            - '@logger'
+            - '@App\Infrastructure\Event\TransactionCompletedEventHandler'
+            - '@App\Infrastructure\Event\RebillTransactionCompletedEventHandler'
+            - '@App\Infrastructure\Event\PaymentCompletedEventListener'
         lazy: false  # Force eager loading to ensure listeners are registered
 
     # Controllers (Presentation Layer)

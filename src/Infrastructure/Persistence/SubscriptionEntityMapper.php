@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence;
 
-use App\Domain\Payment\ValueObject\TransactionId;
+use App\Domain\Billing\Entity\Customer;
 use App\Domain\Shared\ValueObject\Address;
 use App\Domain\Shared\ValueObject\BillingInformation;
 use App\Domain\Shared\ValueObject\Email;
 use App\Domain\Subscription\Entity\Subscription;
 use App\Domain\Subscription\ValueObject\SubscriptionId;
 use App\Domain\Subscription\ValueObject\SubscriptionStatus;
+use App\Infrastructure\Persistence\Entity\CustomerEntity;
 use App\Infrastructure\Persistence\Entity\PlanEntity;
 use App\Infrastructure\Persistence\Entity\SubscriptionEntity;
 use Doctrine\ORM\EntityManagerInterface;
@@ -19,6 +20,7 @@ final class SubscriptionEntityMapper
 {
     public function __construct(
         private readonly PlanEntityMapper $planMapper,
+        private readonly CustomerEntityMapper $customerMapper,
         private readonly EntityManagerInterface $entityManager
     ) {
     }
@@ -28,30 +30,12 @@ final class SubscriptionEntityMapper
         $subscriptionId = SubscriptionId::fromString($entity->getSubscriptionId());
         $status = SubscriptionStatus::fromString($entity->getStatus());
 
-        $email = Email::fromString($entity->getCustomerEmail());
-        $address = Address::create(
-            $entity->getBillingStreet1(),
-            $entity->getBillingStreet2(),
-            $entity->getBillingCity(),
-            $entity->getBillingState(),
-            $entity->getBillingPostalCode(),
-            $entity->getBillingCountry()
-        );
-
-        $billingInformation = new BillingInformation(
-            $entity->getBillingFirstName(),
-            $entity->getBillingLastName(),
-            $email,
-            $address,
-            $entity->getBillingPhone()
-        );
+        // Convert customer to domain and get billing information
+        $customer = $this->customerMapper->toDomain($entity->getCustomer());
+        $billingInformation = $customer->getBillingInformation();
 
         // Convert plan
         $plan = $this->planMapper->toDomain($entity->getPlan());
-
-        $originalTransactionId = $entity->getOriginalTransactionId()
-            ? TransactionId::fromString($entity->getOriginalTransactionId())
-            : null;
 
         // Create domain entity using constructor (since it's persisted data)
         return new Subscription(
@@ -62,7 +46,6 @@ final class SubscriptionEntityMapper
             $entity->getStartDate(),
             $entity->getNextChargeDate(),
             $entity->getCustomerVaultId(),
-            $originalTransactionId,
             $entity->getCreatedAt()
         );
     }
@@ -71,37 +54,16 @@ final class SubscriptionEntityMapper
     {
         $entity = new SubscriptionEntity();
 
-        // Map basic properties
         $entity->setSubscriptionId($domain->getSubscriptionId()->getValue());
         $entity->setStatus($domain->getStatus()->getValue());
         $entity->setStartDate($domain->getStartDate());
         $entity->setNextChargeDate($domain->getNextChargeDate());
         $entity->setCustomerVaultId($domain->getCustomerVaultId());
-        $entity->setOriginalTransactionId(
-            $domain->getOriginalTransactionId()?->getValue()
-        );
         $entity->setCreatedAt($domain->getCreatedAt());
-        $entity->setUpdatedAt($domain->getCreatedAt()); // Set updatedAt to same as createdAt for new records
+        $entity->setUpdatedAt($domain->getCreatedAt());
 
-        // Map amount, frequency, and currency from plan
-        $entity->setAmount($domain->getPlan()->getAmount()->getAmount());
-        $entity->setFrequency($domain->getPlan()->getBillingCycle()->getFrequency());
-        $entity->setCurrencyCode($domain->getAmount()->getCurrency()->getCode());
-
-        // Map billing information
-        $billing = $domain->getBillingInformation();
-        $entity->setCustomerEmail($billing->getEmail()->getValue());
-        $entity->setBillingFirstName($billing->getFirstName());
-        $entity->setBillingLastName($billing->getLastName());
-
-        $address = $billing->getAddress();
-        $entity->setBillingStreet1($address->getStreet1());
-        $entity->setBillingStreet2($address->getStreet2());
-        $entity->setBillingCity($address->getCity());
-        $entity->setBillingState($address->getState());
-        $entity->setBillingPostalCode($address->getPostalCode());
-        $entity->setBillingCountry($address->getCountry());
-        $entity->setBillingPhone($billing->getPhone());
+        $customerEntity = $this->findOrCreateCustomer($domain->getBillingInformation(), $domain->getCustomerVaultId());
+        $entity->setCustomer($customerEntity);
 
         $planRepository = $this->entityManager->getRepository(PlanEntity::class);
         $planEntity = $planRepository->findOneBy(['planId' => $domain->getPlan()->getPlanId()->getValue()]);
@@ -115,5 +77,55 @@ final class SubscriptionEntityMapper
         $entity->setPlan($planEntity);
 
         return $entity;
+    }
+
+    private function findOrCreateCustomer(BillingInformation $billingInformation, ?string $customerVaultId): CustomerEntity
+    {
+        $customerRepository = $this->entityManager->getRepository(CustomerEntity::class);
+
+        if ($customerVaultId) {
+            $existingCustomer = $customerRepository->find($customerVaultId);
+
+            if ($existingCustomer) {
+                $existingCustomer->setEmail($billingInformation->getEmail()->getValue());
+                $existingCustomer->setFirstName($billingInformation->getFirstName());
+                $existingCustomer->setLastName($billingInformation->getLastName());
+
+                $address = $billingInformation->getAddress();
+                $existingCustomer->setStreet1($address->getStreet1());
+                $existingCustomer->setStreet2($address->getStreet2());
+                $existingCustomer->setCity($address->getCity());
+                $existingCustomer->setState($address->getState());
+                $existingCustomer->setPostalCode($address->getPostalCode());
+                $existingCustomer->setCountry($address->getCountry());
+                $existingCustomer->setPhone($billingInformation->getPhone());
+                $existingCustomer->setUpdatedAt(new \DateTimeImmutable());
+
+                return $existingCustomer;
+            }
+        }
+
+        if (!$customerVaultId) {
+            throw new \RuntimeException('Customer vault ID is required to create new customer');
+        }
+
+        $customer = Customer::create(
+            $customerVaultId,
+            $billingInformation->getEmail()->getValue(),
+            $billingInformation->getFirstName(),
+            $billingInformation->getLastName(),
+            $billingInformation->getAddress()->getStreet1(),
+            $billingInformation->getAddress()->getStreet2(),
+            $billingInformation->getAddress()->getCity(),
+            $billingInformation->getAddress()->getState(),
+            $billingInformation->getAddress()->getPostalCode(),
+            $billingInformation->getAddress()->getCountry(),
+            $billingInformation->getPhone()
+        );
+
+        $customerEntity = $this->customerMapper->toEntity($customer);
+        $this->entityManager->persist($customerEntity);
+
+        return $customerEntity;
     }
 }

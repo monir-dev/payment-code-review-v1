@@ -21,8 +21,7 @@ final class CreateSubscriptionCommand
         public readonly string $country,
         public readonly ?string $phone = null,
         public readonly ?DateTimeImmutable $startDate = null,
-        public readonly ?string $customerVaultId = null,
-        public readonly ?string $originalTransactionId = null
+        public readonly ?string $customerVaultId = null
     ) {
     }
 }

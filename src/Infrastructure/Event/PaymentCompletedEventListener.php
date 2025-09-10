@@ -6,6 +6,7 @@ namespace App\Infrastructure\Event;
 
 use App\Application\Command\CreateSubscriptionCommand;
 use App\Application\Handler\CreateSubscriptionCommandHandler;
+use App\Application\Service\TransactionLinkingService;
 use App\Domain\Payment\Event\PaymentCompletedSuccessfullyEvent;
 use Psr\Log\LoggerInterface;
 
@@ -13,6 +14,7 @@ final class PaymentCompletedEventListener
 {
     public function __construct(
         private readonly CreateSubscriptionCommandHandler $createSubscriptionHandler,
+        private readonly TransactionLinkingService $transactionLinkingService,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -21,10 +23,6 @@ final class PaymentCompletedEventListener
     {
         try {
             if (!$event->hasSubscriptionData || !$event->subscriptionData) {
-                $this->logger->info('Payment completed without subscription data', [
-                    'transaction_id' => $event->transactionId,
-                    'amount' => $event->amount
-                ]);
                 return;
             }
 
@@ -52,27 +50,25 @@ final class PaymentCompletedEventListener
                 country: $subscriptionData['billing_country'],
                 phone: $subscriptionData['billing_phone'],
                 startDate: new \DateTimeImmutable('+1 day'), // Start tomorrow
-                originalTransactionId: $event->transactionId,
                 customerVaultId: null // Let handler create one using legacy flow
             );
 
             $result = $this->createSubscriptionHandler->handle($createSubscriptionCommand);
 
-            $this->logger->info('Subscription created successfully from payment event', [
-                'transaction_id' => $event->transactionId,
-                'subscription_id' => $result['subscription_id'] ?? 'N/A',
-                'customer_vault_id' => $result['customer_vault_id'] ?? 'N/A',
-                'plan_id' => $selectedPlan->getPlanId()->getValue(),
-                'customer_email' => $subscriptionData['customer_email'],
-                'event_driven' => true
-            ]);
+            // Link the initial payment transaction to the newly created subscription
+            $subscriptionId = $result['subscription_id'] ?? null;
+            if ($subscriptionId) {
+                $this->transactionLinkingService->linkTransactionToSubscription(
+                    $event->transactionId,
+                    $subscriptionId
+                );
+            }
 
         } catch (\Exception $e) {
             $this->logger->error('Failed to create subscription from payment event', [
                 'transaction_id' => $event->transactionId,
                 'error' => $e->getMessage(),
-                'customer_email' => $event->customerEmail,
-                'event_driven' => true
+                'customer_email' => $event->customerEmail
             ]);
             
             // I will not rethrow - I don't want to break the payment flow

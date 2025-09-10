@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Domain\Subscription\Entity;
 
 use App\Domain\Billing\Entity\Plan;
-use App\Domain\Payment\ValueObject\TransactionId;
 use App\Domain\Shared\ValueObject\BillingInformation;
 use App\Domain\Shared\ValueObject\Money;
 use App\Domain\Subscription\Event\SubscriptionCancelledEvent;
@@ -30,7 +29,6 @@ final class Subscription
         private readonly DateTimeImmutable $startDate,
         private DateTimeImmutable $nextChargeDate,
         private readonly ?string $customerVaultId = null,
-        private readonly ?TransactionId $originalTransactionId = null,
         private readonly DateTimeImmutable $createdAt = new DateTimeImmutable()
     ) {
         if ($startDate->getTimestamp() > $nextChargeDate->getTimestamp()) {
@@ -43,8 +41,7 @@ final class Subscription
         Plan $plan,
         BillingInformation $billingInformation,
         DateTimeImmutable $startDate,
-        ?string $customerVaultId = null,
-        ?TransactionId $originalTransactionId = null
+        ?string $customerVaultId = null
     ): self {
         $nextChargeDate = $plan->getBillingCycle()->calculateNextChargeDate($startDate);
 
@@ -55,8 +52,7 @@ final class Subscription
             SubscriptionStatus::active(),
             $startDate,
             $nextChargeDate,
-            $customerVaultId,
-            $originalTransactionId
+            $customerVaultId
         );
 
         $subscription->recordEvent(new SubscriptionCreatedEvent(
@@ -159,11 +155,6 @@ final class Subscription
     public function getCustomerVaultId(): ?string
     {
         return $this->customerVaultId;
-    }
-
-    public function getOriginalTransactionId(): ?TransactionId
-    {
-        return $this->originalTransactionId;
     }
 
     public function getCreatedAt(): DateTimeImmutable

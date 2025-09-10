@@ -20,15 +20,14 @@ final class GetTransactionHistoryQueryHandler
     public function handle(GetTransactionHistoryQuery $query): array
     {
         try {
-            $this->logger->info('Processing transaction history query', [
-                'transaction_id' => $query->transactionId,
-                'customer_email' => $query->customerEmail,
-                'status' => $query->transactionStatus,
-                'has_date_filters' => $query->startDate !== null || $query->endDate !== null,
-            ]);
-
             // Get transactions based on query filters
-            $transactions = $this->getTransactionsByQuery($query);
+            $transactions = $this->paymentTransactionRepository->findWithFilters(
+                $query->transactionId,
+                $query->customerEmail,
+                $query->transactionStatus,
+                $query->startDate,
+                $query->endDate
+            );
 
             // Format transactions for API response
             $transactionData = [];
@@ -44,11 +43,6 @@ final class GetTransactionHistoryQueryHandler
                 ];
             }
 
-            $this->logger->info('Transaction history query completed', [
-                'transaction_count' => count($transactionData),
-                'transaction_id_filter' => $query->transactionId,
-            ]);
-
             return $transactionData;
 
         } catch (Exception $e) {
@@ -61,15 +55,4 @@ final class GetTransactionHistoryQueryHandler
         }
     }
 
-    private function getTransactionsByQuery(GetTransactionHistoryQuery $query): array
-    {
-        if ($query->transactionId) {
-            $entityManager = $this->paymentTransactionRepository->getEntityManager();
-            return $entityManager
-                ->createQuery(sprintf("SELECT t FROM App\Entity\PaymentTransaction t WHERE t.transaction_id = '%s'", $query->transactionId))
-                ->getResult();
-        }
-
-        return $this->paymentTransactionRepository->findAll();
-    }
 }

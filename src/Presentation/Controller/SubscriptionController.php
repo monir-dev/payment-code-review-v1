@@ -37,7 +37,7 @@ final class SubscriptionController extends AbstractController
     ) {
     }
 
-    #[Route('/', name: 'index', methods: ['GET'])]
+    #[Route('s', name: 'index', methods: ['GET'])]
     public function index(): Response
     {
         return $this->render('subscription/list.html.twig', [

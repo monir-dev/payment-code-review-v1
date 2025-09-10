@@ -37,24 +37,6 @@ final class SubscriptionRepository extends ServiceEntityRepository implements Su
             $existingEntity->setStatus($subscription->getStatus()->getValue());
             $existingEntity->setNextChargeDate($subscription->getNextChargeDate());
             $existingEntity->setUpdatedAt(new \DateTimeImmutable());
-
-            $existingEntity->setAmount($subscription->getPlan()->getAmount()->getAmount());
-            $existingEntity->setFrequency($subscription->getPlan()->getBillingCycle()->getFrequency());
-            $existingEntity->setCurrencyCode($subscription->getAmount()->getCurrency()->getCode());
-
-            $billing = $subscription->getBillingInformation();
-            $existingEntity->setCustomerEmail($billing->getEmail()->getValue());
-            $existingEntity->setBillingFirstName($billing->getFirstName());
-            $existingEntity->setBillingLastName($billing->getLastName());
-
-            $address = $billing->getAddress();
-            $existingEntity->setBillingStreet1($address->getStreet1());
-            $existingEntity->setBillingStreet2($address->getStreet2());
-            $existingEntity->setBillingCity($address->getCity());
-            $existingEntity->setBillingState($address->getState());
-            $existingEntity->setBillingPostalCode($address->getPostalCode());
-            $existingEntity->setBillingCountry($address->getCountry());
-            $existingEntity->setBillingPhone($billing->getPhone());
         } else {
             $existingEntity = $this->mapper->toEntity($subscription);
             $entityManager->persist($existingEntity);

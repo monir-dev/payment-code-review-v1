@@ -105,7 +105,6 @@ final class CancelSubscriptionCommandHandler
             );
 
         } catch (InvalidArgumentException $e) {
-            // Re-throw validation errors as-is
             $this->logger->error('Subscription cancellation validation error', [
                 'subscription_id' => $command->subscriptionId,
                 'error' => $e->getMessage()
@@ -114,11 +113,9 @@ final class CancelSubscriptionCommandHandler
             throw $e;
 
         } catch (\Exception $e) {
-            // Unexpected errors
             $this->logger->error('Unexpected error during subscription cancellation', [
                 'subscription_id' => $command->subscriptionId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'error' => $e->getMessage()
             ]);
 
             throw new \RuntimeException(

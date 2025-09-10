@@ -10,6 +10,7 @@ use App\Domain\Payment\Event\PaymentRefundedSuccessfullyEvent;
 use App\Domain\Subscription\Repository\SubscriptionRepositoryInterface;
 use App\Infrastructure\Event\DomainEventBus;
 use App\Infrastructure\Event\PaymentRefundedEventListener;
+use App\Repository\PaymentTransactionRepository;
 use Psr\Log\LoggerInterface;
 
 final class ProcessRefundCommandHandler
@@ -21,6 +22,7 @@ final class ProcessRefundCommandHandler
         private readonly DomainEventBus $eventBus,
         private readonly SubscriptionRepositoryInterface $subscriptionRepository,
         private readonly CancelSubscriptionCommandHandler $cancelSubscriptionHandler,
+        private readonly PaymentTransactionRepository $transactionRepository,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -87,6 +89,7 @@ final class ProcessRefundCommandHandler
             $listener = new PaymentRefundedEventListener(
                 $this->subscriptionRepository,
                 $this->cancelSubscriptionHandler,
+                $this->transactionRepository,
                 $this->logger
             );
 

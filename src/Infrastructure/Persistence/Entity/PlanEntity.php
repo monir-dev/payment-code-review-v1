@@ -28,6 +28,9 @@ class PlanEntity
     #[ORM\Column(type: Types::STRING, length: 50)]
     private string $frequency;
 
+    #[ORM\Column(type: Types::STRING, length: 50)]
+    private string $currencyCode = 'USD';
+
     #[ORM\Column(type: Types::INTEGER)]
     private int $dayFrequency;
 
@@ -94,14 +97,25 @@ class PlanEntity
         $this->frequency = $frequency;
     }
 
+    public function getCurrencyCode(): string
+    {
+        return $this->currencyCode;
+    }
+
+    public function setCurrencyCode(string $currencyCode): void
+    {
+        $this->currencyCode = $currencyCode;
+    }
+
     public function __toString(): string
     {
         return sprintf(
-            'Plan[id=%s, planId=%s, name=%s, amount=%.2f, frequency=%s]',
+            'Plan[id=%s, planId=%s, name=%s, amount=%.2f %s, frequency=%s]',
             $this->id ?? 'null',
             $this->planId ?? 'null',
             $this->planName ?? 'null',
             $this->amount ?? 0,
+            $this->currencyCode ?? 'USD',
             $this->frequency ?? 'null'
         );
     }

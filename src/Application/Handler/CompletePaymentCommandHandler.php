@@ -7,6 +7,7 @@ namespace App\Application\Handler;
 use App\Application\Command\CompletePaymentCommand;
 use App\Domain\Payment\Event\PaymentCompletedSuccessfullyEvent;
 use App\Infrastructure\Event\DomainEventBus;
+use App\Infrastructure\Event\EventListenerRegistry;
 use App\Infrastructure\Event\PaymentCompletedEventListener;
 use App\Service\NmiPaymentGateway;
 use Psr\Log\LoggerInterface;
@@ -18,7 +19,7 @@ final class CompletePaymentCommandHandler
     public function __construct(
         private readonly NmiPaymentGateway $paymentGateway,
         private readonly DomainEventBus $eventBus,
-        private readonly CreateSubscriptionCommandHandler $createSubscriptionHandler,
+        private readonly EventListenerRegistry $eventListenerRegistry,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -96,17 +97,9 @@ final class CompletePaymentCommandHandler
     private function ensureEventListenerRegistered(): void
     {
         if (!$this->listenerRegistered) {
-            // Create PaymentCompletedEventListener and register it manually
-            $listener = new PaymentCompletedEventListener(
-                $this->createSubscriptionHandler,
-                $this->logger
-            );
-
-            $this->eventBus->subscribe(
-                PaymentCompletedSuccessfullyEvent::class,
-                [$listener, 'handle']
-            );
-
+            // Force EventListenerRegistry instantiation by accessing it
+            // The registry constructor registers all event listeners automatically
+            get_class($this->eventListenerRegistry);
             $this->listenerRegistered = true;
         }
     }

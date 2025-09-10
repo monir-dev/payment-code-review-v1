@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Entity;
 
+use App\Domain\Subscription\ValueObject\SubscriptionStatus;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use InvalidArgumentException;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'subscriptions')]
@@ -162,6 +164,15 @@ class SubscriptionEntity
 
     public function setStatus(string $status): void
     {
+        if (!in_array($status, SubscriptionStatus::getAllValidStatuses(), true)) {
+            throw new InvalidArgumentException(
+                sprintf('Invalid subscription status "%s". Allowed values are: %s',
+                    $status,
+                    implode(', ', SubscriptionStatus::getAllValidStatuses())
+                )
+            );
+        }
+
         $this->status = $status;
     }
 

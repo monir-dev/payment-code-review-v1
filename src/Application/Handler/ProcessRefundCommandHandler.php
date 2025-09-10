@@ -7,6 +7,7 @@ namespace App\Application\Handler;
 use App\Application\Command\ProcessRefundCommand;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Payment\Event\PaymentRefundedSuccessfullyEvent;
+use App\Domain\Payment\Service\RefundProcessingService;
 use App\Domain\Subscription\Repository\SubscriptionRepositoryInterface;
 use App\Infrastructure\Event\DomainEventBus;
 use App\Infrastructure\Event\PaymentRefundedEventListener;
@@ -23,6 +24,7 @@ final class ProcessRefundCommandHandler
         private readonly SubscriptionRepositoryInterface $subscriptionRepository,
         private readonly CancelSubscriptionCommandHandler $cancelSubscriptionHandler,
         private readonly PaymentTransactionRepository $transactionRepository,
+        private readonly RefundProcessingService $refundProcessingService,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -90,6 +92,7 @@ final class ProcessRefundCommandHandler
                 $this->subscriptionRepository,
                 $this->cancelSubscriptionHandler,
                 $this->transactionRepository,
+                $this->refundProcessingService,
                 $this->logger
             );
 

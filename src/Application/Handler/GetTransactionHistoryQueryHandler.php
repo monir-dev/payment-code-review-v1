@@ -23,7 +23,6 @@ final class GetTransactionHistoryQueryHandler
             // Get transactions based on query filters
             $transactions = $this->paymentTransactionRepository->findWithFilters(
                 $query->transactionId,
-                $query->customerEmail,
                 $query->transactionStatus,
                 $query->startDate,
                 $query->endDate
@@ -37,7 +36,7 @@ final class GetTransactionHistoryQueryHandler
                     'transaction_id' => $transaction->getTransactionId(),
                     'amount' => $transaction->getAmount(),
                     'currency_code' => $transaction->getCurrencyCode(),
-                    'payment_status' => $transaction->getPaymentStatus(),
+                    'payment_status' => $transaction->getPaymentStatus()?->getValue(),
                     'last4_digits' => $transaction->getLast4Digits(),
                     'created_at' => $transaction->getCreatedAt()?->format('Y-m-d H:i:s'),
                 ];

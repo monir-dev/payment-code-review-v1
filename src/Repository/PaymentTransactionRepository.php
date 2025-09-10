@@ -5,6 +5,8 @@ namespace App\Repository;
 use App\Entity\PaymentTransaction;
 use App\Domain\Payment\Event\TransactionCompletedEvent;
 use App\Domain\Payment\Event\RebillTransactionCompletedEvent;
+use App\Domain\Payment\ValueObject\PaymentStatus;
+use DateTime;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Uid\Uuid;
@@ -79,7 +81,7 @@ class PaymentTransactionRepository extends ServiceEntityRepository
         }
 
         $transaction = new PaymentTransaction();
-        $transaction->setCreatedAt($event->createdAt ?? new \DateTime());
+        $transaction->setCreatedAt($event->createdAt ?? new DateTime());
         $transaction->setUuid(Uuid::v4()->toString());
         $transaction->setUsedToken($event->usedToken);
         $transaction->setTransactionId($event->transactionId);
@@ -101,7 +103,7 @@ class PaymentTransactionRepository extends ServiceEntityRepository
     public function createFromRebillTransactionCompletedEvent(RebillTransactionCompletedEvent $event): PaymentTransaction
     {
         $transaction = new PaymentTransaction();
-        $transaction->setCreatedAt($event->createdAt ?? new \DateTime());
+        $transaction->setCreatedAt($event->createdAt ?? new DateTime());
         $transaction->setUuid(Uuid::v4()->toString());
         $transaction->setTransactionId($event->transactionId);
         $transaction->setAmount($event->amount);
@@ -158,8 +160,12 @@ class PaymentTransactionRepository extends ServiceEntityRepository
         return $this->findBySubscriptionId($subscriptionId);
     }
 
-    public function findWithFilters(?string $transactionId = null, ?string $customerEmail = null, ?string $status = null, ?\DateTime $startDate = null, ?\DateTime $endDate = null): array
-    {
+    public function findWithFilters(
+        ?string        $transactionId = null,
+        ?PaymentStatus $status = null,
+        ?DateTime      $startDate = null,
+        ?DateTime      $endDate = null
+    ): array {
         $qb = $this->createQueryBuilder('t');
 
         if ($transactionId) {
@@ -169,7 +175,7 @@ class PaymentTransactionRepository extends ServiceEntityRepository
 
         if ($status) {
             $qb->andWhere('t.payment_status = :status')
-               ->setParameter('status', $status);
+               ->setParameter('status', $status->getValue());
         }
 
         if ($startDate) {
@@ -185,5 +191,19 @@ class PaymentTransactionRepository extends ServiceEntityRepository
         return $qb->orderBy('t.createdAt', 'DESC')
                   ->getQuery()
                   ->getResult();
+    }
+
+    public function updateTransactionStatus(string $transactionId, ?PaymentStatus $status): bool
+    {
+        $transaction = $this->findByTransactionId($transactionId);
+
+        if (!$transaction) {
+            return false;
+        }
+
+        $transaction->setPaymentStatus($status);
+        $this->getEntityManager()->flush();
+
+        return true;
     }
 }

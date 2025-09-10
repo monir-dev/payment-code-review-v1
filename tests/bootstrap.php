@@ -19,33 +19,33 @@ if (isset($_SERVER['APP_ENV']) && $_SERVER['APP_ENV'] === 'test') {
 
 function setupTestDatabase(): void {
     static $schemaCreated = false;
-    
+
     // Only create schema once per test session
     if ($schemaCreated) {
         return;
     }
-    
+
     try {
         $kernel = new \App\Kernel('test', false);
         $kernel->boot();
         $container = $kernel->getContainer();
-        
+
         /** @var \Doctrine\ORM\EntityManagerInterface $entityManager */
         $entityManager = $container->get('doctrine.orm.entity_manager');
-        
+
         // Get schema tool and metadata (fresh metadata will be loaded)
         $schemaTool = new \Doctrine\ORM\Tools\SchemaTool($entityManager);
-        
+
         // Force fresh metadata by creating a new metadata factory instance
         $metadataFactory = $entityManager->getMetadataFactory();
         $metadata = $metadataFactory->getAllMetadata();
-        
+
         // Debug: Log metadata for Subscription entity specifically
         foreach ($metadata as $meta) {
             if ($meta->getName() === 'App\Entity\Subscription') {
                 $allFields = array_merge($meta->getFieldNames(), array_keys($meta->getAssociationMappings()));
                 error_log('Subscription entity fields detected: ' . implode(', ', $allFields));
-                
+
                 // Specifically check for original_transaction_id
                 if ($meta->hasField('original_transaction_id')) {
                     error_log('SUCCESS: original_transaction_id field is in metadata');
@@ -55,20 +55,20 @@ function setupTestDatabase(): void {
                 break;
             }
         }
-        
+
         if (empty($metadata)) {
-            throw new \RuntimeException('No entity metadata found. Check if entities are properly configured.');
+            throw new RuntimeException('No entity metadata found. Check if entities are properly configured.');
         }
-        
+
         // Drop existing schema and create fresh schema for testing
         try {
             $schemaTool->dropSchema($metadata);
         } catch (\Exception $e) {
             // Ignore drop errors if tables don't exist
         }
-        
+
         $schemaTool->createSchema($metadata);
-        
+
         // Verify the schema was created correctly by checking column existence
         $connection = $entityManager->getConnection();
         try {
@@ -82,19 +82,18 @@ function setupTestDatabase(): void {
         } catch (\Exception $e) {
             error_log('Could not verify schema: ' . $e->getMessage());
         }
-        
+
         // Log success for debugging
         $entityNames = array_map(fn($meta) => $meta->getName(), $metadata);
         error_log(sprintf('Test database schema created successfully with %d entities: %s', count($metadata), implode(', ', $entityNames)));
-        
+
         $kernel->shutdown();
         $schemaCreated = true;
-        
+
     } catch (\Throwable $e) {
         error_log("CRITICAL: Test database setup failed: " . $e->getMessage());
-        error_log("Stack trace: " . $e->getTraceAsString());
-        
+
         // Re-throw the exception to fail fast if database setup fails
-        throw new \RuntimeException('Test database setup failed: ' . $e->getMessage(), 0, $e);
+        throw new RuntimeException('Test database setup failed: ' . $e->getMessage(), 0, $e);
     }
 }

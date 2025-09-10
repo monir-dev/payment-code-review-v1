@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Domain\Payment\ValueObject\PaymentStatus;
 use App\Repository\PaymentTransactionRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
@@ -113,14 +114,21 @@ class PaymentTransaction
         return $this;
     }
 
-    public function getPaymentStatus(): ?string
+    public function getPaymentStatus(): ?PaymentStatus
     {
-        return $this->paymentStatus;
+        return $this->paymentStatus ? PaymentStatus::fromString($this->paymentStatus) : null;
     }
 
-    public function setPaymentStatus(string $paymentStatus): static
+    public function setPaymentStatus(?PaymentStatus $paymentStatus): static
     {
-        $this->paymentStatus = $paymentStatus;
+        if ($paymentStatus === null) {
+            $this->paymentStatus = null;
+            return $this;
+        }
+
+        $this->paymentStatus = in_array($paymentStatus->getValue(), PaymentStatus::getAllValidStatuses(), true)
+            ? $paymentStatus->getValue()
+            : null;
 
         return $this;
     }

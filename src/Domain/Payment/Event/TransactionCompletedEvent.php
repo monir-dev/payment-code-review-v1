@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Domain\Payment\Event;
 
+use App\Domain\Payment\ValueObject\PaymentStatus;
+
 final class TransactionCompletedEvent
 {
     public function __construct(
         public readonly string $transactionId,
         public readonly float $amount,
         public readonly string $currencyCode,
-        public readonly string $paymentStatus,
+        public readonly PaymentStatus $paymentStatus,
         public readonly string $usedToken,
         public readonly string $last4Digits,
         public readonly ?string $subscriptionId = null,
@@ -27,7 +29,7 @@ final class TransactionCompletedEvent
             transactionId: $nmiResponse['transaction-id'] ?? '',
             amount: (float) ($nmiResponse['amount'] ?? 0),
             currencyCode: $nmiResponse['currency'] ?? 'USD',
-            paymentStatus: 'Approved',
+            paymentStatus: PaymentStatus::approved(),
             usedToken: $nmiResponse['token-id'] ?? '',
             last4Digits: $last4Digits,
             subscriptionId: $subscriptionId,

@@ -116,4 +116,9 @@ final class PaymentStatus
     {
         return $this->status;
     }
+
+    public static function getAllValidStatuses(): array
+    {
+        return self::VALID_STATUSES;
+    }
 }

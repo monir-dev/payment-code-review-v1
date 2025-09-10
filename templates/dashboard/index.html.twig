@@ -1,0 +1,289 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Dashboard - PaymentApp{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h2 mb-0">
+                    <i class="fas fa-tachometer-alt text-primary"></i> Dashboard
+                </h1>
+                <div class="text-muted">
+                    <i class="fas fa-clock"></i> Updated {{ 'now'|date('M d, Y H:i') }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-4 mb-4">
+        <!-- Revenue Card -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-success bg-opacity-10 p-3 rounded">
+                                <i class="fas fa-dollar-sign text-success fs-4"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="text-muted small text-uppercase mb-1">Total Revenue</div>
+                            <div class="fs-4 fw-bold text-success">${{ stats.total_revenue|number_format(2) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Subscriptions Card -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary bg-opacity-10 p-3 rounded">
+                                <i class="fas fa-sync-alt text-primary fs-4"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="text-muted small text-uppercase mb-1">Active Subscriptions</div>
+                            <div class="fs-4 fw-bold text-primary">{{ stats.active_subscriptions }}</div>
+                            <div class="small text-muted">of {{ stats.total_subscriptions }} total</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transactions Card -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-info bg-opacity-10 p-3 rounded">
+                                <i class="fas fa-credit-card text-info fs-4"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="text-muted small text-uppercase mb-1">Recent Transactions</div>
+                            <div class="fs-4 fw-bold text-info">{{ recent_transactions|length }}</div>
+                            <div class="small text-muted">last 10 transactions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Refunds Card -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-warning bg-opacity-10 p-3 rounded">
+                                <i class="fas fa-undo-alt text-warning fs-4"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="text-muted small text-uppercase mb-1">Refunds</div>
+                            <div class="fs-4 fw-bold text-warning">{{ stats.refunded_transactions + stats.partially_refunded_transactions }}</div>
+                            <div class="small text-muted">{{ stats.refunded_transactions }} full, {{ stats.partially_refunded_transactions }} partial</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Recent Transactions -->
+        <div class="col-xl-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-history text-muted me-2"></i>Recent Transactions
+                        </h5>
+                        <a href="{{ path('app_payment_history') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-external-link-alt"></i> View All
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    {% if recent_transactions|length > 0 %}
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th class="border-0 py-3">Transaction ID</th>
+                                        <th class="border-0 py-3">Amount</th>
+                                        <th class="border-0 py-3">Status</th>
+                                        <th class="border-0 py-3">Type</th>
+                                        <th class="border-0 py-3">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for transaction in recent_transactions %}
+                                    <tr>
+                                        <td class="py-3">
+                                            <code class="text-muted">{{ transaction.transactionId }}</code>
+                                        </td>
+                                        <td class="py-3">
+                                            <span class="fw-semibold">${{ transaction.amount|number_format(2) }}</span>
+                                            <small class="text-muted">{{ transaction.currencyCode }}</small>
+                                        </td>
+                                        <td class="py-3">
+                                            {% set status = transaction.paymentStatus %}
+                                            {% if status %}
+                                                {% if status.isApproved() %}
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check"></i> {{ status.getValue()|title }}
+                                                    </span>
+                                                {% elseif status.isRefunded() %}
+                                                    <span class="badge bg-danger">
+                                                        <i class="fas fa-undo"></i> {{ status.getValue()|title }}
+                                                    </span>
+                                                {% elseif status.isPartiallyRefunded() %}
+                                                    <span class="badge bg-warning">
+                                                        <i class="fas fa-exclamation"></i> Partial Refund
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">{{ status.getValue()|title }}</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">Unknown</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="py-3">
+                                            {% if transaction.subscriptionId %}
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-sync-alt"></i> Subscription
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-info">
+                                                    <i class="fas fa-shopping-cart"></i> One-time
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="py-3">
+                                            <small class="text-muted">
+                                                {{ transaction.createdAt ? transaction.createdAt|date('M d, Y H:i') : 'N/A' }}
+                                            </small>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-inbox text-muted mb-3" style="font-size: 3rem;"></i>
+                            <p class="text-muted mb-0">No transactions found</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Subscriptions Preview -->
+        <div class="col-xl-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-users text-muted me-2"></i>Active Subscriptions
+                        </h5>
+                        <a href="{{ path('app_subscription_index') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-external-link-alt"></i> View All
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    {% if active_subscriptions|length > 0 %}
+                        {% for subscription in active_subscriptions %}
+                        <div class="p-3 {% if not loop.last %}border-bottom{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">{{ subscription.plan ? subscription.plan.name : 'Legacy Plan' }}</h6>
+                                    <p class="text-muted small mb-2">
+                                        <i class="fas fa-envelope"></i> {{ subscription.billingInformation.email.value }}
+                                    </p>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-success me-2">
+                                            <i class="fas fa-check-circle"></i> Active
+                                        </span>
+                                        <small class="text-muted">
+                                            Next: {{ subscription.nextChargeDate|date('M d, Y') }}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-semibold text-success">
+                                        $25.00
+                                    </div>
+                                    <small class="text-muted">monthly</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        {% if stats.active_subscriptions > 5 %}
+                        <div class="text-center p-3 bg-light">
+                            <small class="text-muted">
+                                Showing 5 of {{ stats.active_subscriptions }} active subscriptions
+                            </small>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-user-slash text-muted mb-3" style="font-size: 3rem;"></i>
+                            <p class="text-muted mb-0">No active subscriptions</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-bolt text-muted me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a href="{{ path('app_checkout') }}" class="btn btn-primary btn-lg w-100">
+                                <i class="fas fa-credit-card me-2"></i>Process Payment
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ path('app_refund') }}" class="btn btn-warning btn-lg w-100">
+                                <i class="fas fa-undo-alt me-2"></i>Process Refund
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ path('app_subscription_create') }}" class="btn btn-success btn-lg w-100">
+                                <i class="fas fa-plus me-2"></i>Create Subscription
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ path('app_plan_create') }}" class="btn btn-info btn-lg w-100">
+                                <i class="fas fa-plus-circle me-2"></i>Create Plan
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

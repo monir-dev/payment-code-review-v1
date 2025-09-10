@@ -174,7 +174,7 @@ class PaymentTransactionRepository extends ServiceEntityRepository
         }
 
         if ($status) {
-            $qb->andWhere('t.payment_status = :status')
+            $qb->andWhere('t.paymentStatus = :status')
                ->setParameter('status', $status->getValue());
         }
 

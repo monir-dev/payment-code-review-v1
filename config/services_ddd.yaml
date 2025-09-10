@@ -123,6 +123,13 @@ services:
             - '@logger'
         tags: ['app.query_handler']
 
+    App\Application\Handler\GetDashboardStatsQueryHandler:
+        arguments:
+            - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'
+            - '@App\Repository\PaymentTransactionRepository'
+            - '@logger'
+        tags: ['app.query_handler']
+
     App\Application\Handler\GetSubscriptionsByCustomerEmailQueryHandler:
         arguments:
             - '@App\Domain\Subscription\Repository\SubscriptionRepositoryInterface'

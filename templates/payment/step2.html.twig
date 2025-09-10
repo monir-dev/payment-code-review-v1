@@ -1,45 +1,162 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Complete Payment{% endblock %}
+{% block title %}Complete Payment - Step 2{% endblock %}
 
 {% block body %}
 <div class="container mt-5">
     <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Step 2: Enter Payment Information</h3>
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">
+                        <i class="fas fa-credit-card me-2"></i>
+                        Step 2: Enter Payment Information
+                    </h3>
+                    <small class="text-light">Payment Processing</small>
                 </div>
-                <div class="card-body">
-                    <p class="mb-4">Amount to pay: <strong>${{ amount|number_format(2) }}</strong></p>
-                    
-                    {{ form_start(step2Form) }}
+                <div class="card-body p-4">
+                    <div class="alert alert-info mb-4">
+                        <h5 class="alert-heading">Payment Amount</h5>
+                        <p class="mb-0">
+                            <strong>${{ amount|number_format(2) }}</strong>
+                            <small class="text-muted ms-2">USD</small>
+                        </p>
+                    </div>
+
+                    {{ form_start(step2Form, {'attr': {'class': 'needs-validation', 'novalidate': true}}) }}
                         <div class="mb-3">
-                            {{ form_label(step2Form['billing-cc-number']) }}
-                            {{ form_widget(step2Form['billing-cc-number']) }}
+                            {{ form_label(step2Form['billing-cc-number'], null, {'label_attr': {'class': 'form-label fw-bold'}}) }}
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-credit-card"></i>
+                                </span>
+                                {{ form_widget(step2Form['billing-cc-number'], {'attr': {
+                                    'class': 'form-control',
+                                    'placeholder': '4111 1111 1111 1111',
+                                    'autocomplete': 'cc-number'
+                                }}) }}
+                            </div>
                             {{ form_errors(step2Form['billing-cc-number']) }}
                         </div>
-                        
-                        <div class="mb-3">
-                            {{ form_label(step2Form['billing-cc-exp']) }}
-                            {{ form_widget(step2Form['billing-cc-exp']) }}
-                            {{ form_errors(step2Form['billing-cc-exp']) }}
+
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                {{ form_label(step2Form['billing-cc-exp'], null, {'label_attr': {'class': 'form-label fw-bold'}}) }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-calendar"></i>
+                                    </span>
+                                    {{ form_widget(step2Form['billing-cc-exp'], {'attr': {
+                                        'class': 'form-control',
+                                        'placeholder': 'MM/YY',
+                                        'autocomplete': 'cc-exp'
+                                    }}) }}
+                                </div>
+                                {{ form_errors(step2Form['billing-cc-exp']) }}
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                {{ form_label(step2Form.cvv, null, {'label_attr': {'class': 'form-label fw-bold'}}) }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-lock"></i>
+                                    </span>
+                                    {{ form_widget(step2Form.cvv, {'attr': {
+                                        'class': 'form-control',
+                                        'placeholder': '123',
+                                        'autocomplete': 'cc-csc'
+                                    }}) }}
+                                </div>
+                                {{ form_errors(step2Form.cvv) }}
+                            </div>
                         </div>
-                        
-                        <div class="mb-3">
-                            {{ form_label(step2Form.cvv) }}
-                            {{ form_widget(step2Form.cvv) }}
-                            {{ form_errors(step2Form.cvv) }}
-                        </div>
-                        
-                        <div class="d-flex gap-2">
-                            {{ form_widget(step2Form.submit) }}
-                            <a href="{{ path('app_checkout') }}" class="btn btn-secondary">Cancel</a>
+
+                        <div class="d-flex gap-3 justify-content-between mt-4">
+                            {{ form_widget(step2Form.submit, {'attr': {
+                                'class': 'btn btn-success btn-lg flex-fill'
+                            }}) }}
+                            <a href="{{ path('app_checkout') }}" class="btn btn-outline-secondary btn-lg flex-fill">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
                         </div>
                     {{ form_end(step2Form) }}
+
+                    <div class="mt-4 p-3 bg-light rounded">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-shield-alt text-success me-2"></i>
+                            <small class="text-muted">
+                                Your payment information is encrypted and secure.
+                                This transaction is processed through our secure payment gateway.
+                            </small>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+/* Custom styles for payment form */
+.card {
+    border: none;
+    border-radius: 15px;
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border-right: none;
+}
+
+.form-control {
+    border-left: none;
+}
+
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+}
+
+.btn-success {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.btn-success:hover {
+    background-color: #157347;
+    border-color: #146c43;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.querySelector('.needs-validation');
+    if (form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+    }
+
+    // Credit card number formatting
+    const ccNumber = document.querySelector('input[name*="billing-cc-number"]');
+    if (ccNumber) {
+        ccNumber.addEventListener('input', function(e) {
+            // Remove all non-digits
+            let value = e.target.value.replace(/\D/g, '');
+            // Add spaces every 4 digits
+            value = value.replace(/(\d{4})(?=\d)/g, '$1 ');
+            e.target.value = value;
+        });
+    }
+});
+</script>
 {% endblock %}

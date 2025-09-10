@@ -1,12 +1,15 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Create Subscription{% endblock %}
+{% block title %}Create Subscription - DDD{% endblock %}
 
 {% block body %}
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-md-10 col-lg-8">
-                <h1 class="text-center mb-4">Create New Subscription</h1>
+                <h1 class="text-center mb-4">
+                    <i class="fas fa-plus-circle text-success"></i>
+                    Create New Subscription
+                </h1>
 
                 {{ form_start(subscriptionForm) }}
 
@@ -20,10 +23,10 @@
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-8 mb-3">
-                                    {{ form_label(subscriptionForm.plan) }}
-                                    {{ form_widget(subscriptionForm.plan, {'attr': {'class': 'form-select'}}) }}
-                                    {{ form_errors(subscriptionForm.plan) }}
-                                    {{ form_help(subscriptionForm.plan) }}
+                                    {{ form_label(subscriptionForm.plan_id) }}
+                                    {{ form_widget(subscriptionForm.plan_id, {'attr': {'class': 'form-select'}}) }}
+                                    {{ form_errors(subscriptionForm.plan_id) }}
+                                    {{ form_help(subscriptionForm.plan_id) }}
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     {{ form_label(subscriptionForm.start_date) }}
@@ -61,57 +64,57 @@
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    {{ form_label(subscriptionForm.billingFirstName) }}
-                                    {{ form_widget(subscriptionForm.billingFirstName, {'attr': {'class': 'form-control'}}) }}
-                                    {{ form_errors(subscriptionForm.billingFirstName) }}
+                                    {{ form_label(subscriptionForm.billing_first_name) }}
+                                    {{ form_widget(subscriptionForm.billing_first_name, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billing_first_name) }}
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    {{ form_label(subscriptionForm.billingLastName) }}
-                                    {{ form_widget(subscriptionForm.billingLastName, {'attr': {'class': 'form-control'}}) }}
-                                    {{ form_errors(subscriptionForm.billingLastName) }}
+                                    {{ form_label(subscriptionForm.billing_last_name) }}
+                                    {{ form_widget(subscriptionForm.billing_last_name, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billing_last_name) }}
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                {{ form_label(subscriptionForm.billingAddress1) }}
-                                {{ form_widget(subscriptionForm.billingAddress1, {'attr': {'class': 'form-control'}}) }}
-                                {{ form_errors(subscriptionForm.billingAddress1) }}
+                                {{ form_label(subscriptionForm.billing_address1) }}
+                                {{ form_widget(subscriptionForm.billing_address1, {'attr': {'class': 'form-control'}}) }}
+                                {{ form_errors(subscriptionForm.billing_address1) }}
                             </div>
 
                             <div class="mb-3">
-                                {{ form_label(subscriptionForm.billingAddress2) }}
-                                {{ form_widget(subscriptionForm.billingAddress2, {'attr': {'class': 'form-control'}}) }}
-                                {{ form_errors(subscriptionForm.billingAddress2) }}
+                                {{ form_label(subscriptionForm.billing_address2) }}
+                                {{ form_widget(subscriptionForm.billing_address2, {'attr': {'class': 'form-control'}}) }}
+                                {{ form_errors(subscriptionForm.billing_address2) }}
                             </div>
 
                             <div class="row">
                                 <div class="col-md-4 mb-3">
-                                    {{ form_label(subscriptionForm.billingCity) }}
-                                    {{ form_widget(subscriptionForm.billingCity, {'attr': {'class': 'form-control'}}) }}
-                                    {{ form_errors(subscriptionForm.billingCity) }}
+                                    {{ form_label(subscriptionForm.billing_city) }}
+                                    {{ form_widget(subscriptionForm.billing_city, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billing_city) }}
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    {{ form_label(subscriptionForm.billingState) }}
-                                    {{ form_widget(subscriptionForm.billingState, {'attr': {'class': 'form-control'}}) }}
-                                    {{ form_errors(subscriptionForm.billingState) }}
+                                    {{ form_label(subscriptionForm.billing_state) }}
+                                    {{ form_widget(subscriptionForm.billing_state, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billing_state) }}
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    {{ form_label(subscriptionForm.billingPostal) }}
-                                    {{ form_widget(subscriptionForm.billingPostal, {'attr': {'class': 'form-control'}}) }}
-                                    {{ form_errors(subscriptionForm.billingPostal) }}
+                                    {{ form_label(subscriptionForm.billing_postal) }}
+                                    {{ form_widget(subscriptionForm.billing_postal, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billing_postal) }}
                                 </div>
                             </div>
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    {{ form_label(subscriptionForm.billingCountry) }}
-                                    {{ form_widget(subscriptionForm.billingCountry, {'attr': {'class': 'form-control'}}) }}
-                                    {{ form_errors(subscriptionForm.billingCountry) }}
+                                    {{ form_label(subscriptionForm.billing_country) }}
+                                    {{ form_widget(subscriptionForm.billing_country, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billing_country) }}
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    {{ form_label(subscriptionForm.billingPhone) }}
-                                    {{ form_widget(subscriptionForm.billingPhone, {'attr': {'class': 'form-control'}}) }}
-                                    {{ form_errors(subscriptionForm.billingPhone) }}
+                                    {{ form_label(subscriptionForm.billing_phone) }}
+                                    {{ form_widget(subscriptionForm.billing_phone, {'attr': {'class': 'form-control'}}) }}
+                                    {{ form_errors(subscriptionForm.billing_phone) }}
                                 </div>
                             </div>
                         </div>
@@ -122,12 +125,29 @@
                         <div class="card-footer">
                             <div class="d-grid gap-2">
                                 {{ form_widget(subscriptionForm.submit, {'attr': {'class': 'btn btn-success btn-lg'}}) }}
-                                <a href="{{ path('app_subscription_list') }}" class="text-center">View All Subscriptions</a>
+                                <a href="{{ path('app_subscription_index') }}" class="text-center">View All Subscriptions</a>
                             </div>
                         </div>
                     </div>
 
                 {{ form_end(subscriptionForm) }}
+
+                <!-- Success/Error Messages -->
+                {% for message in app.flashes('subscription_success') %}
+                    <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                        <i class="fas fa-check-circle"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+
+                {% for message in app.flashes('subscription_error') %}
+                    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                        <i class="fas fa-exclamation-circle"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
             </div>
         </div>
     </div>

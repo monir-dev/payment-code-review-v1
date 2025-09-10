@@ -25,9 +25,6 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
         BillingInformation $billingInformation,
         ?string $gatewayToken = null
     ): array {
-        // Convert domain objects to NMI format
-        $billingData = $this->convertBillingInformationToArray($billingInformation);
-        
         try {
             if ($gatewayToken) {
                 // Complete an existing payment with token
@@ -46,8 +43,8 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
                 $result = $this->nmiGateway->initializePayment(
                     $amount,
                     $currency,
-                    null, // redirectUrl handled at controller level
-                    $billingData
+                    '', // redirectUrl handled at controller level
+                    $billingInformation
                 );
                 
                 return [
@@ -98,10 +95,8 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
         string $redirectUrl,
         BillingInformation $billingInformation
     ): array {
-        $billingData = $this->convertBillingInformationToArray($billingInformation);
-        
         try {
-            $result = $this->nmiGateway->initializePayment($amount, $currency, $redirectUrl, $billingData);
+            $result = $this->nmiGateway->initializePayment($amount, $currency, $redirectUrl, $billingInformation);
             
             return [
                 'status' => $result['status'],
@@ -246,21 +241,4 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
         }
     }
 
-    private function convertBillingInformationToArray(BillingInformation $billing): array
-    {
-        $address = $billing->getAddress();
-        
-        return [
-            'first-name' => $billing->getFirstName(),
-            'last-name' => $billing->getLastName(),
-            'email' => $billing->getEmail()->getValue(),
-            'address1' => $address->getStreet1(),
-            'address2' => $address->getStreet2(),
-            'city' => $address->getCity(),
-            'state' => $address->getState(),
-            'postal' => $address->getPostalCode(),
-            'country' => $address->getCountry(),
-            'phone' => $billing->getPhone()
-        ];
-    }
 }

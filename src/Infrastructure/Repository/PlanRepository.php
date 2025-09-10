@@ -21,7 +21,6 @@ final class PlanRepository extends ServiceEntityRepository implements PlanReposi
         ManagerRegistry $registry,
         private readonly PlanEntityMapper $mapper,
         private readonly DomainEventPublisher $eventPublisher,
-        private readonly EventListenerRegistry $eventRegistry  // Force instantiation
     ) {
         parent::__construct($registry, PlanEntity::class);
     }
@@ -29,10 +28,10 @@ final class PlanRepository extends ServiceEntityRepository implements PlanReposi
     public function save(Plan $plan): void
     {
         $entityManager = $this->getEntityManager();
-        
+
         // Try to find existing entity first
         $existingEntity = $this->findOneBy(['planId' => $plan->getPlanId()->getValue()]);
-        
+
         if ($existingEntity) {
             // Update existing entity with domain object values
             $existingEntity->setPlanName($plan->getName());
@@ -75,6 +74,9 @@ final class PlanRepository extends ServiceEntityRepository implements PlanReposi
         );
     }
 
+    /**
+     * @return Plan[]
+     */
     public function findActivePlans(): array
     {
         $entities = $this->createQueryBuilder('p')
@@ -98,5 +100,19 @@ final class PlanRepository extends ServiceEntityRepository implements PlanReposi
             fn(PlanEntity $entity) => $this->mapper->toDomain($entity),
             $entities
         );
+    }
+
+    /**
+     * Find a plan by database ID (for form processing)
+     */
+    public function findById(int $id): ?Plan
+    {
+        $entity = $this->find($id);
+
+        if (!$entity) {
+            return null;
+        }
+
+        return $this->mapper->toDomain($entity);
     }
 }

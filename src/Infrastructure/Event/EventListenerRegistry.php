@@ -11,7 +11,6 @@ use App\Domain\Billing\Event\PlanCreatedEvent;
 use App\Domain\Billing\Event\PlanDeactivatedEvent;
 use App\Domain\Subscription\Event\SubscriptionCancelledEvent;
 use App\Domain\Subscription\Event\SubscriptionCreatedEvent;
-use App\Domain\Subscription\Event\SubscriptionRenewedEvent;
 use Psr\Log\LoggerInterface;
 
 final class EventListenerRegistry
@@ -38,7 +37,7 @@ final class EventListenerRegistry
             PaymentRefundedEvent::class,
             [$this->paymentListener, 'onPaymentRefunded']
         );
-        
+          
         // Subscription event listeners
         $this->eventBus->subscribe(
             SubscriptionCreatedEvent::class,
@@ -50,10 +49,6 @@ final class EventListenerRegistry
             [$this->subscriptionListener, 'onSubscriptionCancelled']
         );
         
-        $this->eventBus->subscribe(
-            SubscriptionRenewedEvent::class,
-            [$this->subscriptionListener, 'onSubscriptionRenewed']
-        );
         
         // Plan event listeners
         $this->eventBus->subscribe(

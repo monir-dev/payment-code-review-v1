@@ -6,7 +6,6 @@ namespace App\Infrastructure\Event;
 
 use App\Domain\Subscription\Event\SubscriptionCancelledEvent;
 use App\Domain\Subscription\Event\SubscriptionCreatedEvent;
-use App\Domain\Subscription\Event\SubscriptionRenewedEvent;
 use Psr\Log\LoggerInterface;
 
 final class SubscriptionEventListener
@@ -33,16 +32,6 @@ final class SubscriptionEventListener
         $this->logger->info('Subscription cancelled', [
             'subscription_id' => $event->getSubscriptionId()->getValue(),
             'reason' => $event->getReason(),
-            'occurred_on' => $event->getOccurredOn()->format('Y-m-d H:i:s')
-        ]);
-    }
-
-    public function onSubscriptionRenewed(SubscriptionRenewedEvent $event): void
-    {
-        $this->logger->info('Subscription renewed successfully', [
-            'subscription_id' => $event->getSubscriptionId()->getValue(),
-            'amount' => $event->getAmount()->format(),
-            'next_charge_date' => $event->getNextChargeDate()->format('Y-m-d'),
             'occurred_on' => $event->getOccurredOn()->format('Y-m-d H:i:s')
         ]);
     }

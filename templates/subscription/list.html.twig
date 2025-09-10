@@ -1,6 +1,6 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Subscriptions{% endblock %}
+{% block title %}Subscriptions - DDD{% endblock %}
 
 {% block body %}
     <div class="container">
@@ -20,27 +20,27 @@
                     <div class="row">
                         {% for subscription in subscriptions %}
                             <div class="col-lg-6 col-xl-6 mb-4">
-                                <div class="card h-100 {% if subscription.status == 'active' %}border-success{% elseif subscription.status == 'cancelled' %}border-danger{% else %}border-warning{% endif %}">
+                                <div class="card h-100 {% if subscription.getStatus().getValue() == 'active' %}border-success{% elseif subscription.getStatus().getValue() == 'cancelled' %}border-danger{% else %}border-warning{% endif %}">
                                     <!-- Subscription Header -->
-                                    <div class="card-header {% if subscription.status == 'active' %}bg-success text-white{% elseif subscription.status == 'cancelled' %}bg-danger text-white{% else %}bg-warning text-dark{% endif %}">
+                                    <div class="card-header {% if subscription.getStatus().getValue() == 'active' %}bg-success text-white{% elseif subscription.getStatus().getValue() == 'cancelled' %}bg-danger text-white{% else %}bg-warning text-dark{% endif %}">
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div>
-                                                <h5 class="card-title mb-1">{{ subscription.plan ? subscription.plan.planName : 'Legacy Subscription' }}</h5>
+                                                <h5 class="card-title mb-1">{{ subscription.plan ? subscription.plan.name : 'Legacy Subscription' }}</h5>
                                                 <small class="opacity-75">
-                                                    <i class="fas fa-envelope"></i> {{ subscription.customerEmail }}
+                                                    <i class="fas fa-envelope"></i> {{ subscription.billingInformation.email.value }}
                                                 </small>
                                                 <br>
                                                 <small class="opacity-75">
-                                                    <i class="fas fa-tag"></i> #{{ subscription.subscriptionId }}
+                                                    <i class="fas fa-tag"></i> #{{ subscription.subscriptionId.value }}
                                                 </small>
                                             </div>
-                                            <span class="badge {% if subscription.status == 'active' %}bg-light text-success{% elseif subscription.status == 'cancelled' %}bg-light text-danger{% else %}bg-light text-warning{% endif %} ms-2">
-                                                {% if subscription.status == 'active' %}
+                                            <span class="badge {% if subscription.getStatus().getValue() == 'active' %}bg-light text-success{% elseif subscription.getStatus().getValue() == 'cancelled' %}bg-light text-danger{% else %}bg-light text-warning{% endif %} ms-2">
+                                                {% if subscription.getStatus().getValue() == 'active' %}
                                                     <i class="fas fa-check-circle"></i> Active
-                                                {% elseif subscription.status == 'cancelled' %}
+                                                {% elseif subscription.getStatus().getValue() == 'cancelled' %}
                                                     <i class="fas fa-times-circle"></i> Cancelled
                                                 {% else %}
-                                                    <i class="fas fa-pause-circle"></i> {{ subscription.status|title }}
+                                                    <i class="fas fa-pause-circle"></i> {{ subscription.getStatus().getValue()|title }}
                                                 {% endif %}
                                             </span>
                                         </div>
@@ -51,9 +51,9 @@
                                         <!-- Amount and Frequency -->
                                         <div class="text-center mb-3">
                                             <h3 class="text-primary mb-0">
-                                                ${{ subscription.amount|number_format(2) }}
+                                                ${{ subscription.amount.amount|number_format(2) }}
                                             </h3>
-                                            <small class="text-muted">per {{ subscription.frequency }}</small>
+                                            <small class="text-muted">per {{ subscription.billingCycle.frequency }}</small>
                                         </div>
 
                                         <!-- Subscription Details -->
@@ -61,13 +61,13 @@
                                             <div class="col-6">
                                                 <div class="bg-light p-2 rounded text-center">
                                                     <small class="text-muted d-block">Plan</small>
-                                                    <strong>{{ subscription.plan ? subscription.plan.planName : 'Legacy' }}</strong>
+                                                    <strong>{{ subscription.plan ? subscription.plan.name : 'Legacy' }}</strong>
                                                 </div>
                                             </div>
                                             <div class="col-6">
                                                 <div class="bg-light p-2 rounded text-center">
                                                     <small class="text-muted d-block">Frequency</small>
-                                                    <strong>{{ subscription.frequency|title }}</strong>
+                                                    <strong>{{ subscription.billingCycle.frequency|title }}</strong>
                                                 </div>
                                             </div>
                                         </div>
@@ -83,28 +83,18 @@
                                             <div class="col-6">
                                                 <div class="bg-light p-2 rounded text-center">
                                                     <small class="text-muted d-block">
-                                                        {% if subscription.status == 'active' %}Next Charge{% else %}Status{% endif %}
+                                                        {% if subscription.getStatus().getValue() == 'active' %}Next Charge{% else %}Status{% endif %}
                                                     </small>
                                                     <strong>
-                                                        {% if subscription.status == 'active' and subscription.nextChargeDate %}
+                                                        {% if subscription.getStatus().getValue() == 'active' and subscription.nextChargeDate %}
                                                             {{ subscription.nextChargeDate|date('M d, Y') }}
                                                         {% else %}
-                                                            {{ subscription.status|title }}
+                                                            {{ subscription.getStatus().getValue()|title }}
                                                         {% endif %}
                                                     </strong>
                                                 </div>
                                             </div>
                                         </div>
-
-                                        <!-- Additional Info -->
-                                        {% if subscription.customerVaultId %}
-                                            <div class="bg-light p-2 rounded mb-1">
-                                                <small class="text-muted">
-                                                    <i class="fas fa-user"></i>
-                                                    Customer ID: {{ subscription.customerVaultId }}
-                                                </small>
-                                            </div>
-                                        {% endif %}
 
                                         <!-- Created Date -->
                                         <div class="bg-light p-2 rounded mb-3">
@@ -115,36 +105,30 @@
                                         </div>
                                     </div>
 
-                                    <!-- Subscription Actions -->
-                                    <div class="card-footer bg-transparent">
-                                        {% if subscription.status == 'active' %}
-                                            <div class="d-grid gap-2 mb-2">
-                                                <!-- Manual Rebilling Form -->
-                                                <form method="post" action="{{ path('app_subscription_rebill', {id: subscription.id}) }}"
-                                                      onsubmit="return confirm('Process rebilling now?');">
-                                                    <div class="input-group input-group-sm">
-                                                        <span class="input-group-text">$</span>
-                                                        <input type="number" name="amount" step="0.01" min="0.01"
-                                                               class="form-control"
-                                                               placeholder="{{ subscription.amount }}"
-                                                               title="Leave empty to use default amount">
-                                                        <button type="submit" class="btn btn-primary">
-                                                            <i class="fas fa-credit-card"></i> Rebill
-                                                        </button>
-                                                    </div>
-                                                </form>
-                                            </div>
-
-                                            <div class="d-grid">
-                                                <!-- Cancel Subscription -->
-                                                <form method="post" action="{{ path('app_subscription_cancel', {id: subscription.id}) }}"
-                                                      onsubmit="return confirm('Are you sure you want to cancel this subscription?');">
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100">
-                                                        <i class="fas fa-ban"></i> Cancel Subscription
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        {% elseif subscription.status == 'cancelled' %}
+                    <!-- Subscription Actions -->
+                    <div class="card-footer bg-transparent">
+                        {% if subscription.getStatus().getValue() == 'active' %}
+                            <div class="row g-2">
+                                <!-- Rebill Subscription -->
+                                <div class="col-6">
+                                    <button type="button" class="btn btn-outline-primary btn-sm w-100" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#rebillModal-{{ subscription.subscriptionId.value }}">
+                                        <i class="fas fa-credit-card"></i> Rebill
+                                    </button>
+                                </div>
+                                
+                                <!-- Cancel Subscription -->
+                                <div class="col-6">
+                                    <form method="post" action="{{ path('app_subscription_cancel', {id: subscription.subscriptionId.value}) }}"
+                                          onsubmit="return confirm('Are you sure you want to cancel this subscription?');">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                                            <i class="fas fa-ban"></i> Cancel
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                                        {% elseif subscription.getStatus().getValue() == 'cancelled' %}
                                             <div class="alert alert-secondary mb-0 py-2">
                                                 <small>
                                                     <i class="fas fa-info-circle"></i>
@@ -157,6 +141,95 @@
                             </div>
                         {% endfor %}
                     </div>
+
+                    <!-- Rebill Modals -->
+                    {% for subscription in subscriptions %}
+                        {% if subscription.getStatus().getValue() == 'active' %}
+                            <div class="modal fade" id="rebillModal-{{ subscription.subscriptionId.value }}" tabindex="-1" 
+                                 aria-labelledby="rebillModalLabel-{{ subscription.subscriptionId.value }}" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <form method="post" action="{{ path('app_subscription_rebill', {id: subscription.subscriptionId.value}) }}">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="rebillModalLabel-{{ subscription.subscriptionId.value }}">
+                                                    <i class="fas fa-credit-card text-primary"></i>
+                                                    Rebill Subscription
+                                                </h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <!-- Subscription Info -->
+                                                <div class="alert alert-info">
+                                                    <div class="row">
+                                                        <div class="col-sm-6">
+                                                            <strong>Plan:</strong> {{ subscription.plan ? subscription.plan.name : 'Legacy' }}<br>
+                                                            <strong>Customer:</strong> {{ subscription.billingInformation.email.value }}
+                                                        </div>
+                                                        <div class="col-sm-6">
+                                                            <strong>Default Amount:</strong> ${{ subscription.amount.amount|number_format(2) }}<br>
+                                                            <strong>Frequency:</strong> {{ subscription.billingCycle.frequency|title }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Rebill Options -->
+                                                <div class="mb-3">
+                                                    <label for="amount-{{ subscription.subscriptionId.value }}" class="form-label">
+                                                        <i class="fas fa-dollar-sign"></i> Amount
+                                                    </label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text">$</span>
+                                                        <input type="number" step="0.01" class="form-control" 
+                                                               id="amount-{{ subscription.subscriptionId.value }}" name="amount"
+                                                               placeholder="{{ subscription.amount.amount|number_format(2) }}" 
+                                                               title="Leave empty to use default plan amount">
+                                                    </div>
+                                                    <div class="form-text">Leave empty to use the default plan amount (${{ subscription.amount.amount|number_format(2) }})</div>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label for="reason-{{ subscription.subscriptionId.value }}" class="form-label">
+                                                        <i class="fas fa-comment-alt"></i> Reason
+                                                    </label>
+                                                    <select class="form-select" id="reason-{{ subscription.subscriptionId.value }}" name="reason" required>
+                                                        <option value="Manual rebill">Manual rebill</option>
+                                                        <option value="Failed payment retry">Failed payment retry</option>
+                                                        <option value="Account adjustment">Account adjustment</option>
+                                                        <option value="Customer request">Customer request</option>
+                                                        <option value="System correction">System correction</option>
+                                                    </select>
+                                                </div>
+
+                                                <!-- Gateway Processing -->
+                                                <div class="mb-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               id="processWithGateway-{{ subscription.subscriptionId.value }}" 
+                                                               name="process_with_gateway" value="1" checked>
+                                                        <label class="form-check-label" for="processWithGateway-{{ subscription.subscriptionId.value }}">
+                                                            <i class="fas fa-shield-alt text-success"></i>
+                                                            Process payment through gateway
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-text">
+                                                        Unchecking this will only update the subscription record without charging the customer.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                                    <i class="fas fa-times"></i> Cancel
+                                                </button>
+                                                <button type="submit" class="btn btn-primary">
+                                                    <i class="fas fa-credit-card"></i> Process Rebill
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
 
                     <!-- Summary Stats -->
                     <div class="row mt-4">
@@ -184,7 +257,7 @@
                             <div class="card border-primary">
                                 <div class="card-body text-center">
                                     <h3 class="text-primary">
-                                        ${{ subscriptions|filter(s => s.status == 'active')|reduce((carry, s) => carry + s.amount, 0)|number_format(2) }}
+                                        ${{ subscriptions|filter(s => s.status == 'active')|reduce((carry, s) => carry + s.amount.amount, 0)|number_format(2) }}
                                     </h3>
                                     <p class="text-muted mb-0">Monthly Revenue</p>
                                 </div>

@@ -3,18 +3,151 @@
 {% block title %}Process Refund{% endblock %}
 
 {% block body %}
-    <h1>Process Refund</h1>
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h3 class="card-title mb-0">
+                        <i class="fas fa-undo me-2"></i>
+                        Process Refund
+                    </h3>
+                    <small class="text-dark">Payment Processing</small>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Important:</strong> Processing a refund will automatically cancel any associated subscriptions.
+                    </div>
 
-    {{ form_start(refundForm) }}
-        <div class="mb-3">
-            {{ form_label(refundForm.transactionId) }}
-            {{ form_widget(refundForm.transactionId, {'attr': {'class': 'form-control'}}) }}
-            {{ form_errors(refundForm.transactionId) }}
+                    {{ form_start(refundForm, {'attr': {'class': 'needs-validation', 'novalidate': true}}) }}
+                        <div class="mb-4">
+                            {{ form_label(refundForm.transactionId, null, {'label_attr': {'class': 'form-label fw-bold'}}) }}
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-hashtag"></i>
+                                </span>
+                                {{ form_widget(refundForm.transactionId, {'attr': {
+                                    'class': 'form-control',
+                                    'placeholder': 'Enter original transaction ID',
+                                    'required': true
+                                }}) }}
+                            </div>
+                            {{ form_errors(refundForm.transactionId) }}
+                            <div class="form-text">
+                                The original transaction ID from the payment you want to refund.
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            {{ form_label(refundForm.refundAmount, null, {'label_attr': {'class': 'form-label fw-bold'}}) }}
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </span>
+                                {{ form_widget(refundForm.refundAmount, {'attr': {
+                                    'class': 'form-control',
+                                    'placeholder': '0.00',
+                                    'step': '0.01',
+                                    'min': '0.01',
+                                    'required': true
+                                }}) }}
+                                <span class="input-group-text">USD</span>
+                            </div>
+                            {{ form_errors(refundForm.refundAmount) }}
+                            <div class="form-text">
+                                Enter the amount to refund. This can be the full amount or a partial refund.
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            {{ form_widget(refundForm.submitRefund, {'attr': {
+                                'class': 'btn btn-warning btn-lg',
+                                'onclick': 'return confirm("Are you sure you want to process this refund? This action cannot be undone and will cancel associated subscriptions.")'
+                            }}) }}
+                        </div>
+                    {{ form_end(refundForm) }}
+                </div>
+            </div>
         </div>
-        <div class="mb-3">
-            {{ form_label(refundForm.refundAmount) }}
-            {{ form_widget(refundForm.refundAmount, {'attr': {'class': 'form-control'}}) }}
-            {{ form_errors(refundForm.refundAmount) }}
-        </div>
-    {{ form_end(refundForm) }}
+    </div>
+</div>
+
+<style>
+/* Custom styles for refund form */
+.card {
+    border: none;
+    border-radius: 15px;
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border-right: none;
+}
+
+.form-control {
+    border-left: none;
+}
+
+.form-control:focus {
+    border-color: #ffc107;
+    box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.15);
+}
+
+.btn-warning {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #212529;
+}
+
+.btn-warning:hover {
+    background-color: #ffb300;
+    border-color: #ffb300;
+    color: #212529;
+}
+
+.alert-warning {
+    border-left: 4px solid #ffc107;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.querySelector('.needs-validation');
+    if (form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+    }
+
+    // Transaction ID formatting (remove spaces and special characters)
+    const transactionId = document.querySelector('input[name*="transactionId"]');
+    if (transactionId) {
+        transactionId.addEventListener('input', function(e) {
+            // Remove all non-alphanumeric characters
+            e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+        });
+    }
+
+    // Amount validation
+    const amountInput = document.querySelector('input[name*="refundAmount"]');
+    if (amountInput) {
+        amountInput.addEventListener('blur', function(e) {
+            const value = parseFloat(e.target.value);
+            if (value && value > 0) {
+                e.target.value = value.toFixed(2);
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

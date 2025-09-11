@@ -41,3 +41,6 @@
 - Project full flow works. Codes and tests are not in good shape though.
 - Now I will focus on refactoring.
 
+# Added two more notes for more details
+- SIMPLE_SETUP.md
+- DDD_TRANSFORMATION_NOTES.md

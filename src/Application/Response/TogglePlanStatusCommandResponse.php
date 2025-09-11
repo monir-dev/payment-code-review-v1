@@ -14,7 +14,7 @@ final class TogglePlanStatusCommandResponse
         public readonly string $newStatus,
         public readonly string $action,
         public readonly string $message,
-        public readonly array $events = [],
+        public readonly array $events = []
     ) {
     }
 

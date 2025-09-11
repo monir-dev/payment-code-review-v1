@@ -7,6 +7,7 @@ namespace App\Presentation\Controller;
 use App\Application\Command\InitializePaymentCommand;
 use App\Application\Command\CompletePaymentCommand;
 use App\Application\Command\ProcessRefundCommand;
+use App\Domain\Shared\ValueObject\Money;
 use App\Application\Query\GetTransactionHistoryQuery;
 use App\Application\Handler\InitializePaymentCommandHandler;
 use App\Application\Handler\CompletePaymentCommandHandler;
@@ -44,7 +45,7 @@ class PaymentController extends AbstractController
 
             $completePaymentCommand = new CompletePaymentCommand(
                 tokenId: $tokenId,
-                paymentAmount: $sessionData['payment_amount'],
+                paymentAmount: $sessionData['payment_amount'] ? Money::fromFloat($sessionData['payment_amount']) : null,
                 subscriptionData: $sessionData['subscription_data']
             );
 
@@ -130,7 +131,7 @@ class PaymentController extends AbstractController
 
             // Create payment initialization command
             $initializePaymentCommand = new InitializePaymentCommand(
-                amount: $amount,
+                amount: Money::fromFloat($amount, $data['currency']),
                 currency: $data['currency'],
                 redirectUrl: $redirectUrl,
                 billingFirstName: $data['billingFirstName'],
@@ -170,11 +171,11 @@ class PaymentController extends AbstractController
                     ];
                 }
 
-                $this->paymentSessionService->storePaymentSessionData($amount, $subscriptionData);
+                $this->paymentSessionService->storePaymentSessionData(Money::fromFloat($amount), $subscriptionData);
 
                 // Create Step 2 form with the NMI form URL as action
                 $step2Form = $this->createForm(Step2Type::class, null, [
-                    'action' => $result->gatewayResponse['form_url'] ?? ''
+                    'action' => $result->redirectUrl ?? ''
                 ]);
 
                 // Render Step 2 form
@@ -183,7 +184,7 @@ class PaymentController extends AbstractController
                     'amount' => $amount
                 ]);
             } else {
-                $this->addFlash('danger', 'Failed to initialize payment: ' . ($result['message'] ?? 'Unknown error'));
+                $this->addFlash('danger', 'Failed to initialize payment: ' . ($result->message ?? 'Unknown error'));
             }
         }
 
@@ -203,7 +204,7 @@ class PaymentController extends AbstractController
 
             $processRefundCommand = new ProcessRefundCommand(
                 transactionId: $data['transactionId'],
-                refundAmount: $data['refundAmount']
+                refundAmount: Money::fromFloat($data['refundAmount'])
             );
 
             $result = $this->processRefundHandler->handle($processRefundCommand);

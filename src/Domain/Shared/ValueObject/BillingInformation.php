@@ -64,4 +64,23 @@ final class BillingInformation
             && $this->address->equals($other->address)
             && $this->phone === $other->phone;
     }
+
+    /**
+     * Convert billing information to array format suitable for payment gateway
+     */
+    public function toArray(): array
+    {
+        return [
+            'first-name' => $this->firstName,
+            'last-name' => $this->lastName,
+            'email' => $this->email->getValue(),
+            'address1' => $this->address->getStreet1(),
+            'address2' => $this->address->getStreet2(),
+            'city' => $this->address->getCity(),
+            'state' => $this->address->getState(),
+            'postal' => $this->address->getPostalCode(),
+            'country' => $this->address->getCountry(),
+            'phone' => $this->phone,
+        ];
+    }
 }

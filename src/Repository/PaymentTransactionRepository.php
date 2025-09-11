@@ -85,8 +85,8 @@ class PaymentTransactionRepository extends ServiceEntityRepository
         $transaction->setUuid(Uuid::v4()->toString());
         $transaction->setUsedToken($event->usedToken);
         $transaction->setTransactionId($event->transactionId);
-        $transaction->setAmount($event->amount);
-        $transaction->setCurrencyCode($event->currencyCode);
+        $transaction->setAmount($event->amount->getAmount());
+        $transaction->setCurrencyCode($event->amount->getCurrency()->getCode());
         $transaction->setPaymentStatus($event->paymentStatus);
         $transaction->setLast4Digits($event->last4Digits);
 
@@ -106,8 +106,8 @@ class PaymentTransactionRepository extends ServiceEntityRepository
         $transaction->setCreatedAt($event->createdAt ?? new DateTime());
         $transaction->setUuid(Uuid::v4()->toString());
         $transaction->setTransactionId($event->transactionId);
-        $transaction->setAmount($event->amount);
-        $transaction->setCurrencyCode($event->currencyCode);
+        $transaction->setAmount($event->amount->getAmount());
+        $transaction->setCurrencyCode($event->amount->getCurrency()->getCode());
         $transaction->setPaymentStatus($event->paymentStatus);
         $transaction->setSubscriptionId($event->subscriptionId); // Always linked to subscription
 

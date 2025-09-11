@@ -85,7 +85,7 @@ final class SubscriptionController extends AbstractController
                 $this->logger->info('Subscription created via DDD', [
                     'subscription_id' => $result->subscriptionId,
                     'plan_name' => $result->planName,
-                    'amount' => $result->amount
+                    'amount' => $result->amount->format()
                 ]);
 
                 return $this->redirectToRoute('app_subscription_index');
@@ -167,15 +167,15 @@ final class SubscriptionController extends AbstractController
 
             $this->addFlash('success', sprintf(
                 'Subscription rebilled successfully! Transaction ID: %s, Next charge: %s',
-                $result['transaction_id'],
-                $result['next_charge_date']
+                $result->transactionId,
+                $result->nextChargeDate
             ));
 
             $this->logger->info('Subscription rebilled via DDD command', [
-                'subscription_id' => $result['subscription_id'],
-                'transaction_id' => $result['transaction_id'],
-                'amount' => $result['amount'],
-                'gateway_processed' => $result['gateway_processed']
+                'subscription_id' => $result->subscriptionId,
+                'transaction_id' => $result->transactionId,
+                'amount' => $result->amount,
+                'gateway_processed' => $result->gatewayProcessed
             ]);
 
             return $this->redirectToRoute('app_subscription_index');
@@ -228,13 +228,24 @@ final class SubscriptionController extends AbstractController
             );
 
             $this->logger->info('Subscription created via API', [
-                'subscription_id' => $result['subscription_id'],
-                'plan_name' => $result['plan_name']
+                'subscription_id' => $result->subscriptionId,
+                'plan_name' => $result->planName
             ]);
 
             return new JsonResponse([
                 'success' => true,
-                'subscription' => $result
+                'subscription' => [
+                    'subscription_id' => $result->subscriptionId,
+                    'status' => $result->status,
+                    'customer_vault_id' => $result->customerVaultId,
+                    'customer_email' => $result->customerEmail,
+                    'plan_id' => $result->planId,
+                    'plan_name' => $result->planName,
+                    'amount' => $result->amount->getAmount(),
+                    'frequency' => $result->frequency,
+                    'start_date' => $result->startDate,
+                    'next_charge_date' => $result->nextChargeDate
+                ]
             ], 201);
 
         } catch (JsonException $e) {
@@ -327,15 +338,24 @@ final class SubscriptionController extends AbstractController
             $result = $this->rebillSubscriptionHandler->handle($command);
 
             $this->logger->info('Subscription rebilled via API', [
-                'subscription_id' => $result['subscription_id'],
-                'transaction_id' => $result['transaction_id'],
-                'amount' => $result['amount'],
+                'subscription_id' => $result->subscriptionId,
+                'transaction_id' => $result->transactionId,
+                'amount' => $result->amount,
                 'initiated_by' => $command->initiatedBy
             ]);
 
             return new JsonResponse([
                 'success' => true,
-                'subscription' => $result
+                'subscription' => [
+                    'subscription_id' => $result->subscriptionId,
+                    'status' => $result->status,
+                    'transaction_id' => $result->transactionId,
+                    'amount' => $result->amount,
+                    'reason' => $result->reason,
+                    'next_charge_date' => $result->nextChargeDate,
+                    'rebilled_at' => $result->rebilledAt,
+                    'gateway_processed' => $result->gatewayProcessed
+                ]
             ], 200);
 
         } catch (JsonException $e) {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\ProcessPaymentCommand;
+use App\Application\Response\ProcessPaymentCommandResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Payment\Entity\Payment;
 use App\Domain\Payment\Repository\PaymentRepositoryInterface;
@@ -22,25 +23,25 @@ final class ProcessPaymentCommandHandler
     ) {
     }
 
-    public function handle(ProcessPaymentCommand $command): array
+    public function handle(ProcessPaymentCommand $command): ProcessPaymentCommandResponse
     {
         // Create value objects
-        $money = Money::fromFloat($command->amount, $command->currencyCode);
+        $money = $command->amount;
         $email = Email::fromString($command->email);
         $address = Address::create(
-            $command->street1,
-            $command->street2,
-            $command->city,
-            $command->state,
-            $command->postalCode,
-            $command->country
+            street1: $command->street1,
+            street2: $command->street2,
+            city: $command->city,
+            state: $command->state,
+            postalCode: $command->postalCode,
+            country: $command->country
         );
         $billingInformation = new BillingInformation(
-            $command->firstName,
-            $command->lastName,
-            $email,
-            $address,
-            $command->phone
+            firstName: $command->firstName,
+            lastName: $command->lastName,
+            email: $email,
+            address: $address,
+            phone: $command->phone
         );
 
         // Create payment aggregate
@@ -54,25 +55,25 @@ final class ProcessPaymentCommandHandler
 
         $gatewayResult = $this->paymentGateway->processPayment(
             $transactionId->getValue(),
-            $money->getAmount(),
+            $money,
             $money->getCurrency()->getCode(),
             $billingInformation
         );
 
         // Update payment status based on gateway result
-        if ($gatewayResult['status'] === 'approved') {
+        if ($gatewayResult->status === 'approved') {
             $payment->approve();
-        } elseif ($gatewayResult['status'] === 'declined') {
-            $payment->decline($gatewayResult['reason'] ?? 'Payment declined');
+        } elseif ($gatewayResult->status === 'declined') {
+            $payment->decline($gatewayResult->reason ?? 'Payment declined');
         }
 
         $this->paymentRepository->save($payment);
 
-        return [
-            'status' => $payment->getStatus()->getValue(),
-            'transaction_id' => $payment->getTransactionId()->getValue(),
-            'amount' => $payment->getAmount()->format(),
-            'events' => $payment->getUncommittedEvents()
-        ];
+        return new ProcessPaymentCommandResponse(
+            status: $payment->getStatus()->getValue(),
+            transactionId: $payment->getTransactionId()->getValue(),
+            amount: $payment->getAmount()->format(),
+            events: $payment->getUncommittedEvents()
+        );
     }
 }

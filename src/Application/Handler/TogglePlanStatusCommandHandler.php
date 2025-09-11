@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\TogglePlanStatusCommand;
+use App\Application\Response\TogglePlanStatusCommandResponse;
 use App\Domain\Billing\Repository\PlanRepositoryInterface;
 use App\Domain\Billing\ValueObject\PlanId;
+use Exception;
 use Psr\Log\LoggerInterface;
 
 final class TogglePlanStatusCommandHandler
@@ -17,7 +19,7 @@ final class TogglePlanStatusCommandHandler
     ) {
     }
 
-    public function handle(TogglePlanStatusCommand $command): array
+    public function handle(TogglePlanStatusCommand $command): TogglePlanStatusCommandResponse
     {
         try {
             // Find the plan
@@ -28,10 +30,6 @@ final class TogglePlanStatusCommandHandler
                 throw new \DomainException('Plan not found with ID: ' . $command->planId);
             }
 
-            // Store the original status for logging
-            $originalStatus = $plan->getStatus()->getValue();
-
-            // Use domain logic for status toggle
             if ($plan->isActive()) {
                 $plan->deactivate();
                 $action = 'deactivated';
@@ -43,29 +41,18 @@ final class TogglePlanStatusCommandHandler
             // Save the plan (this will trigger domain event publishing)
             $this->planRepository->save($plan);
 
-            $newStatus = $plan->getStatus()->getValue();
+            return new TogglePlanStatusCommandResponse(
+                success: true,
+                planId: $plan->getPlanId()->getValue(),
+                planName: $plan->getName(),
+                originalStatus: $plan->getStatus()->getValue(),
+                newStatus: $plan->getStatus()->getValue(),
+                action: $action,
+                message: "Plan {$action} successfully",
+                events: $plan->getUncommittedEvents()
+            );
 
-            // Log the successful operation
-            $this->logger->info('Plan status toggled via DDD command handler', [
-                'plan_id' => $plan->getPlanId()->getValue(),
-                'plan_name' => $plan->getName(),
-                'original_status' => $originalStatus,
-                'new_status' => $newStatus,
-                'action' => $action
-            ]);
-
-            return [
-                'success' => true,
-                'plan_id' => $plan->getPlanId()->getValue(),
-                'plan_name' => $plan->getName(),
-                'original_status' => $originalStatus,
-                'new_status' => $newStatus,
-                'action' => $action,
-                'message' => "Plan {$action} successfully",
-                'events' => $plan->getUncommittedEvents()
-            ];
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $this->logger->error('Plan status toggle failed', [
                 'plan_id' => $command->planId,
                 'error' => $e->getMessage(),

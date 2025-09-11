@@ -26,32 +26,32 @@ final class InitializePaymentCommandHandler
             // Create BillingInformation value object
             $email = Email::fromString($command->billingEmail);
             $address = Address::create(
-                $command->billingAddress1,
-                $command->billingAddress2,
-                $command->billingCity,
-                $command->billingState,
-                $command->billingPostal,
-                $command->billingCountry
+                street1: $command->billingAddress1,
+                street2: $command->billingAddress2,
+                city: $command->billingCity,
+                state: $command->billingState,
+                postalCode: $command->billingPostal,
+                country: $command->billingCountry
             );
             $billingInformation = new BillingInformation(
-                $command->billingFirstName,
-                $command->billingLastName,
-                $email,
-                $address,
-                $command->billingPhone
+                firstName: $command->billingFirstName,
+                lastName: $command->billingLastName,
+                email: $email,
+                address: $address,
+                phone: $command->billingPhone
             );
 
             // Initialize payment through gateway
             $result = $this->paymentGateway->initializePayment(
                 $command->amount,
-                $command->currency,
+                $command->amount->getCurrency()->getCode(),
                 $command->redirectUrl,
                 $billingInformation
             );
 
-            if ($result['status'] === 'success') {
+            if ($result->isSuccessful()) {
                 $this->logger->info('Payment initialization successful', [
-                    'amount' => $command->amount,
+                    'amount' => $command->amount->format(),
                     'currency' => $command->currency,
                     'is_subscription' => $command->isSubscription,
                     'plan_id' => $command->planId,
@@ -59,23 +59,23 @@ final class InitializePaymentCommandHandler
                 ]);
             } else {
                 $this->logger->error('Payment initialization failed', [
-                    'message' => $result['message'] ?? 'Unknown error',
-                    'amount' => $command->amount,
+                    'message' => $result->message ?? 'Unknown error',
+                    'amount' => $command->amount->format(),
                     'customer_email' => $command->billingEmail
                 ]);
             }
 
             return new InitializePaymentCommandResponse(
-                status: $result['status'],
-                redirectUrl: $result['redirect_url'] ?? null,
-                tokenId: $result['token_id'] ?? null,
-                message: $result['message'] ?? null,
-                gatewayResponse: $result
+                status: $result->status,
+                redirectUrl: $result->formUrl ?? null,
+                tokenId: $result->tokenId ?? null,
+                message: $result->message ?? null,
+                gatewayResponse: $result->rawResponse ?? []
             );
         } catch (\Exception $e) {
             $this->logger->error('Payment initialization exception', [
                 'error' => $e->getMessage(),
-                'amount' => $command->amount,
+                'amount' => $command->amount->format(),
                 'customer_email' => $command->billingEmail
             ]);
 

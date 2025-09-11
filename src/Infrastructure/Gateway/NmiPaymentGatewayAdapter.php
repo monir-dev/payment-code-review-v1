@@ -4,10 +4,21 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Gateway;
 
+use App\Application\Response\Gateway\CancelSubscriptionResponse;
+use App\Application\Response\Gateway\CompleteTransactionResponse;
+use App\Application\Response\Gateway\CreateCustomerVaultResponse;
+use App\Application\Response\Gateway\CreatePlanResponse;
+use App\Application\Response\Gateway\CreateSubscriptionResponse;
+use App\Application\Response\Gateway\InitializePaymentResponse;
+use App\Application\Response\Gateway\ProcessPaymentResponse;
+use App\Application\Response\Gateway\RebillResponse;
+use App\Application\Response\Gateway\RefundResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Shared\ValueObject\BillingInformation;
+use App\Domain\Shared\ValueObject\Money;
 use App\Service\NmiPaymentGateway;
 use App\Dto\CreatePlanDto;
+use Exception;
 use Psr\Log\LoggerInterface;
 
 final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
@@ -20,24 +31,21 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
 
     public function processPayment(
         string $transactionId,
-        float $amount,
+        Money $amount,
         string $currency,
         BillingInformation $billingInformation,
         ?string $gatewayToken = null
-    ): array {
+    ): ProcessPaymentResponse {
         try {
             if ($gatewayToken) {
                 // Complete an existing payment with token
-                $request = new \stdClass();
-                $request->token_id = $gatewayToken;
-                
-                $result = $this->nmiGateway->completeTransaction($request);
-                
-                return [
-                    'status' => $result['status'] === 'success' ? 'approved' : 'declined',
-                    'transaction_id' => $result['transaction_id'] ?? '',
-                    'reason' => $result['decline_message'] ?? $result['error_message'] ?? ''
-                ];
+                $result = $this->nmiGateway->completeTransaction($gatewayToken);
+
+                return new ProcessPaymentResponse(
+                    status: $result->isSuccessful() ? 'approved' : 'declined',
+                    transactionId: $result->transactionId ?? '',
+                    reason: $result->declineMessage ?? $result->errorMessage ?? ''
+                );
             } else {
                 // Initialize new payment
                 $result = $this->nmiGateway->initializePayment(
@@ -46,157 +54,163 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
                     '', // redirectUrl handled at controller level
                     $billingInformation
                 );
-                
-                return [
-                    'status' => $result['status'] === 'success' ? 'approved' : 'declined',
-                    'form_url' => $result['form_url'] ?? '',
-                    'reason' => $result['message'] ?? ''
-                ];
+
+                return new ProcessPaymentResponse(
+                    status: $result->isSuccessful() ? 'approved' : 'declined',
+                    reason: $result->message ?? ''
+                );
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $this->logger->error('Payment gateway error', [
                 'transaction_id' => $transactionId,
                 'error' => $e->getMessage()
             ]);
-            
-            return [
-                'status' => 'failed',
-                'reason' => 'Payment processing failed'
-            ];
+
+            return new ProcessPaymentResponse(
+                status: 'failed',
+                reason: 'Payment processing failed'
+            );
         }
     }
 
-    public function processRefund(string $originalTransactionId, float $refundAmount): array
+    public function processRefund(string $originalTransactionId, Money $refundAmount): RefundResponse
     {
         try {
             $result = $this->nmiGateway->processRefund($originalTransactionId, $refundAmount);
-            
-            return [
-                'status' => $result['status'],
-                'transaction_id' => $result['transaction_id'] ?? '',
-                'message' => $result['message'] ?? ''
-            ];
-        } catch (\Exception $e) {
+
+            return new RefundResponse(
+                status: $result->status,
+                transactionId: $result->transactionId ?? '',
+                refundAmount: $refundAmount->getAmount(),
+                originalTransactionId: $originalTransactionId,
+                message: $result->message ?? ''
+            );
+        } catch (Exception $e) {
             $this->logger->error('Refund gateway error', [
                 'original_transaction_id' => $originalTransactionId,
                 'error' => $e->getMessage()
             ]);
-            
-            return [
-                'status' => 'error',
-                'message' => 'Refund processing failed'
-            ];
+
+            return new RefundResponse(
+                status: 'error',
+                refundAmount: $refundAmount->getAmount(),
+                originalTransactionId: $originalTransactionId,
+                message: 'Refund processing failed'
+            );
         }
     }
 
     public function initializePayment(
-        float $amount,
+        Money $amount,
         string $currency,
         string $redirectUrl,
-        BillingInformation $billingInformation
-    ): array {
+        BillingInformation $billingInformation,
+        array $shippingInfo = []
+    ): InitializePaymentResponse {
         try {
-            $result = $this->nmiGateway->initializePayment($amount, $currency, $redirectUrl, $billingInformation);
-            
-            return [
-                'status' => $result['status'],
-                'form_url' => $result['form_url'] ?? '',
-                'message' => $result['message'] ?? ''
-            ];
-        } catch (\Exception $e) {
+            $result = $this->nmiGateway->initializePayment($amount, $currency, $redirectUrl, $billingInformation, $shippingInfo);
+
+            return new InitializePaymentResponse(
+                status: $result->status,
+                formUrl: $result->formUrl ?? '',
+                message: $result->message ?? ''
+            );
+        } catch (Exception $e) {
             $this->logger->error('Payment initialization error', [
                 'error' => $e->getMessage()
             ]);
-            
-            return [
-                'status' => 'error',
-                'message' => 'Payment initialization failed'
-            ];
+
+            return new InitializePaymentResponse(
+                status: 'error',
+                message: 'Payment initialization failed'
+            );
         }
     }
 
-    public function createPlan(CreatePlanDto $planDto): array
+    public function completeTransactionByTokenId(string $tokenId, ?string $subscriptionId = null): CompleteTransactionResponse
     {
         try {
-            $result = $this->nmiGateway->createPlan($planDto);
-            
-            return [
-                'status' => $result['status'],
-                'plan_id' => $result['plan_id'] ?? $planDto->planId,
-                'message' => $result['message'] ?? ''
-            ];
-        } catch (\Exception $e) {
+            return $this->nmiGateway->completeTransactionByTokenId($tokenId, $subscriptionId);
+        } catch (Exception $e) {
+            $this->logger->error('Transaction completion gateway error', [
+                'token_id' => $tokenId,
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage()
+            ]);
+
+            return new CompleteTransactionResponse(
+                status: 'error',
+                transactionId: '',
+                errorMessage: 'Transaction completion failed: ' . $e->getMessage()
+            );
+        }
+    }
+
+    public function createPlan(CreatePlanDto $planDto): CreatePlanResponse
+    {
+        try {
+            return $this->nmiGateway->createPlan($planDto);
+        } catch (Exception $e) {
             $this->logger->error('Plan creation gateway error', [
                 'plan_name' => $planDto->planName,
                 'plan_id' => $planDto->planId,
                 'error' => $e->getMessage()
             ]);
-            
-            return [
-                'status' => 'error',
-                'message' => 'Plan creation failed: ' . $e->getMessage()
-            ];
+
+            return new CreatePlanResponse(
+                status: 'error',
+                message: 'Plan creation failed: ' . $e->getMessage()
+            );
         }
     }
 
-    public function createCustomerVault(array $billingInfo): array
+    public function createCustomerVault(array $billingInfo): CreateCustomerVaultResponse
     {
         try {
-            $result = $this->nmiGateway->createCustomerVault($billingInfo);
-            
-            return [
-                'status' => $result['status'],
-                'customer_vault_id' => $result['customer_vault_id'] ?? '',
-                'message' => $result['message'] ?? ''
-            ];
-        } catch (\Exception $e) {
+            return $this->nmiGateway->createCustomerVault($billingInfo);
+        } catch (Exception $e) {
             $this->logger->error('Customer vault creation gateway error', [
                 'billing_info' => $billingInfo,
                 'error' => $e->getMessage()
             ]);
-            
-            return [
-                'status' => 'error',
-                'message' => 'Customer vault creation failed: ' . $e->getMessage()
-            ];
+
+            return new CreateCustomerVaultResponse(
+                status: 'error',
+                message: 'Customer vault creation failed: ' . $e->getMessage()
+            );
         }
     }
 
-    public function cancelSubscription(string $subscriptionId): array
+    public function cancelSubscription(string $subscriptionId): CancelSubscriptionResponse
     {
         try {
-            $result = $this->nmiGateway->cancelSubscription($subscriptionId);
-
-            return [
-                'status' => $result['status'],
-                'message' => $result['message'] ?? '',
-                'already_cancelled' => $result['already_cancelled'] ?? false
-            ];
-        } catch (\Exception $e) {
+            return $this->nmiGateway->cancelSubscription($subscriptionId);
+        } catch (Exception $e) {
             $this->logger->error('Subscription cancellation gateway error', [
                 'subscription_id' => $subscriptionId,
                 'error' => $e->getMessage()
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Subscription cancellation failed: ' . $e->getMessage()
-            ];
+            return new CancelSubscriptionResponse(
+                status: 'error',
+                message: 'Subscription cancellation failed: ' . $e->getMessage()
+            );
         }
     }
 
-    public function processRebilling(string $subscriptionId, string $customerVaultId, ?float $amount = null): array
+    public function processRebilling(string $subscriptionId, string $customerVaultId, ?Money $amount = null): RebillResponse
     {
         try {
             $result = $this->nmiGateway->processRebilling($subscriptionId, $customerVaultId, $amount);
 
-            return [
-                'status' => $result['status'],
-                'transaction_id' => $result['transaction_id'] ?? '',
-                'amount' => $result['amount'] ?? $amount,
-                'message' => $result['message'] ?? ''
-            ];
-        } catch (\Exception $e) {
+            return new RebillResponse(
+                status: $result->status,
+                transactionId: $result->transactionId ?? '',
+                amount: $result->amount ?: $amount,
+                subscriptionId: $subscriptionId,
+                message: $result->message ?? ''
+            );
+        } catch (Exception $e) {
             $this->logger->error('Rebilling gateway error', [
                 'subscription_id' => $subscriptionId,
                 'customer_vault_id' => $customerVaultId,
@@ -204,10 +218,11 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
                 'error' => $e->getMessage()
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Rebilling failed: ' . $e->getMessage()
-            ];
+            return new RebillResponse(
+                status: 'error',
+                subscriptionId: $subscriptionId,
+                message: 'Rebilling failed: ' . $e->getMessage()
+            );
         }
     }
 
@@ -216,17 +231,10 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
         string $customerVaultId,
         \DateTimeImmutable $startDate,
         array $billingInfo = []
-    ): array {
+    ): CreateSubscriptionResponse {
         try {
-            $result = $this->nmiGateway->createSubscription($planId, $customerVaultId, $startDate, $billingInfo);
-
-            return [
-                'status' => $result['status'],
-                'subscription_id' => $result['subscription_id'] ?? '',
-                'transaction_id' => $result['transaction_id'] ?? '',
-                'message' => $result['message'] ?? ''
-            ];
-        } catch (\Exception $e) {
+            return $this->nmiGateway->createSubscription($planId, $customerVaultId, $startDate, $billingInfo);
+        } catch (Exception $e) {
             $this->logger->error('Subscription creation gateway error', [
                 'plan_id' => $planId,
                 'customer_vault_id' => $customerVaultId,
@@ -234,10 +242,10 @@ final class NmiPaymentGatewayAdapter implements PaymentGatewayInterface
                 'error' => $e->getMessage()
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Subscription creation failed: ' . $e->getMessage()
-            ];
+            return new CreateSubscriptionResponse(
+                status: 'error',
+                message: 'Subscription creation failed: ' . $e->getMessage()
+            );
         }
     }
 

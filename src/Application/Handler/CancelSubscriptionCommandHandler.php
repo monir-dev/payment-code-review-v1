@@ -51,10 +51,10 @@ final class CancelSubscriptionCommandHandler
                 );
 
                 // If gateway cancellation fails, we might still want to proceed depending on business rules
-                if ($gatewayResult['status'] === 'error') {
+                if ($gatewayResult->isFailed()) {
                     $this->logger->warning('Gateway cancellation failed but continuing with local cancellation', [
                         'subscription_id' => $subscription->getSubscriptionId()->getValue(),
-                        'gateway_error' => $gatewayResult['message'] ?? 'Unknown error'
+                        'gateway_error' => $gatewayResult->message ?? 'Unknown error'
                     ]);
                 }
             }
@@ -66,28 +66,10 @@ final class CancelSubscriptionCommandHandler
             // 4. Persist the changes using DDD repository
             $this->subscriptionRepository->save($subscription);
 
-            // 5. Prepare success response
-            $result = [
-                'subscription_id' => $subscription->getSubscriptionId()->getValue(),
-                'status' => $subscription->getStatus()->getValue(),
-                'reason' => $command->reason,
-                'cancelled_at' => (new DateTimeImmutable())->format('c'),
-                'gateway_cancelled' => $command->cancelWithGateway,
-                'events' => [] // Domain events will be handled by event listeners
-            ];
-
-            if ($gatewayResult) {
-                $result['gateway_result'] = [
-                    'status' => $gatewayResult['status'],
-                    'message' => $gatewayResult['message'] ?? '',
-                    'already_cancelled' => $gatewayResult['already_cancelled'] ?? false
-                ];
-            }
-
             $this->logger->info('Subscription cancelled successfully', [
                 'subscription_id' => $subscription->getSubscriptionId()->getValue(),
                 'reason' => $command->reason,
-                'gateway_status' => $gatewayResult['status'] ?? 'not_attempted',
+                'gateway_status' => $gatewayResult->status ?? 'not_attempted',
                 'cancelled_by' => $command->cancelledBy
             ]);
 
@@ -99,7 +81,12 @@ final class CancelSubscriptionCommandHandler
                 cancelledBy: $command->cancelledBy ?? 'Unknown',
                 cancelledAt: (new DateTimeImmutable())->format('c'),
                 gatewayProcessed: $command->cancelWithGateway,
-                gatewayResult: $gatewayResult,
+                gatewayResult: $gatewayResult ? [
+                    'status' => $gatewayResult->status,
+                    'message' => $gatewayResult->message,
+                    'already_cancelled' => $gatewayResult->alreadyCancelled ?? false,
+                    'raw_response' => $gatewayResult->rawResponse
+                ] : null,
                 events: []
             );
 

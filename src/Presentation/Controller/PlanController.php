@@ -8,8 +8,8 @@ use App\Application\Command\CreatePlanCommand;
 use App\Application\Command\TogglePlanStatusCommand;
 use App\Application\Handler\CreatePlanCommandHandler;
 use App\Application\Handler\TogglePlanStatusCommandHandler;
+use App\Domain\Shared\ValueObject\Money;
 use App\Domain\Billing\Repository\PlanRepositoryInterface;
-use App\Domain\Billing\ValueObject\PlanId;
 use App\Presentation\Form\PlanType;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -49,7 +49,7 @@ final class PlanController extends AbstractController
             try {
                 $command = new CreatePlanCommand(
                     planName: $data['planName'],
-                    amount: (float) $data['amount'],
+                    amount: Money::fromFloat((float) $data['amount'], 'USD'),
                     currencyCode: 'USD',
                     frequency: $data['frequency']
                 );
@@ -59,7 +59,7 @@ final class PlanController extends AbstractController
                 $this->addFlash('success', sprintf(
                     'Plan created successfully! Name: %s, Amount: %s',
                     $result->planName,
-                    $result->amount
+                    $result->amount->format()
                 ));
 
                 $this->logger->info('Plan created via DDD', [
@@ -97,13 +97,13 @@ final class PlanController extends AbstractController
             $result = $this->toggleStatusHandler->handle($command);
 
             // Add success flash message
-            $this->addFlash('success', $result['message']); // Keep as array for now - we'll update when we refactor TogglePlanStatusCommandHandler
+            $this->addFlash('success', $result->message);
 
             return $this->redirectToRoute('app_plan_index');
 
         } catch (\Exception $e) {
             $this->addFlash('error', 'Status toggle failed: ' . $e->getMessage());
-            
+
             return $this->redirectToRoute('app_plan_index');
         }
     }
@@ -125,7 +125,7 @@ final class PlanController extends AbstractController
             // Create plan using DDD command
             $command = new CreatePlanCommand(
                 planName: $data['planName'],
-                amount: (float) $data['amount'],
+                amount: Money::fromFloat((float) $data['amount'], 'USD'),
                 currencyCode: $data['currencyCode'] ?? 'USD',
                 frequency: $data['frequency']
             );
@@ -142,7 +142,7 @@ final class PlanController extends AbstractController
                 'plan' => [
                     'plan_id' => $result->planId,
                     'plan_name' => $result->planName,
-                    'amount' => $result->amount,
+                    'amount' => $result->amount->getAmount(),
                     'frequency' => $result->frequency,
                     'day_frequency' => $result->dayFrequency,
                     'status' => $result->status,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\RebillSubscriptionCommand;
+use App\Application\Response\RebillSubscriptionCommandResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Shared\ValueObject\Money;
 use App\Domain\Subscription\Repository\SubscriptionRepositoryInterface;
@@ -22,7 +23,7 @@ final class RebillSubscriptionCommandHandler
     ) {
     }
 
-    public function handle(RebillSubscriptionCommand $command): array
+    public function handle(RebillSubscriptionCommand $command): RebillSubscriptionCommandResponse
     {
         try {
             // 1. Validate and fetch the subscription using domain value object
@@ -62,42 +63,31 @@ final class RebillSubscriptionCommandHandler
                 $gatewayResult = $this->paymentGateway->processRebilling(
                     $subscription->getSubscriptionId()->getValue(),
                     $subscription->getCustomerVaultId(),
-                    $rebillAmount->getAmount()
+                    $rebillAmount
                 );
 
                 // Check if gateway processing failed
-                if ($gatewayResult['status'] === 'error' || $gatewayResult['status'] === 'declined') {
+                if ($gatewayResult->isFailed()) {
                     throw new \RuntimeException(
-                        'Gateway rebill failed: ' . ($gatewayResult['message'] ?? 'Unknown error')
+                        'Gateway rebill failed: ' . ($gatewayResult->message ?? 'Unknown error')
                     );
                 }
             }
 
             // 4. Apply domain business rules and process the rebill
-            $transactionId = $gatewayResult['transaction_id'] ?? 'manual-' . uniqid();
+            $transactionId = $gatewayResult->transactionId ?? 'manual-' . uniqid();
             $subscription->processRebill($rebillAmount, $transactionId, $command->reason);
 
             // 5. Persist the changes using DDD repository
             $this->subscriptionRepository->save($subscription);
 
             // 6. Prepare success response
-            $result = [
-                'subscription_id' => $subscription->getSubscriptionId()->getValue(),
-                'status' => $subscription->getStatus()->getValue(),
-                'transaction_id' => $transactionId,
-                'amount' => $rebillAmount->format(),
-                'reason' => $command->reason,
-                'next_charge_date' => $subscription->getNextChargeDate()->format('Y-m-d'),
-                'rebilled_at' => (new \DateTimeImmutable())->format('c'),
-                'gateway_processed' => $command->processWithGateway,
-                'events' => [] // Domain events will be handled by event listeners
-            ];
-
+            $gatewayResultArray = null;
             if ($gatewayResult) {
-                $result['gateway_result'] = [
-                    'status' => $gatewayResult['status'],
-                    'message' => $gatewayResult['message'] ?? '',
-                    'gateway_amount' => $gatewayResult['amount'] ?? null
+                $gatewayResultArray = [
+                    'status' => $gatewayResult->status,
+                    'message' => $gatewayResult->message ?? '',
+                    'gateway_amount' => $gatewayResult->amount?->getAmount() ?? null
                 ];
             }
 
@@ -107,11 +97,22 @@ final class RebillSubscriptionCommandHandler
                 'amount' => $rebillAmount->format(),
                 'next_charge_date' => $subscription->getNextChargeDate()->format('Y-m-d'),
                 'reason' => $command->reason,
-                'gateway_status' => $gatewayResult['status'] ?? 'not_attempted',
+                'gateway_status' => $gatewayResult->status ?? 'not_attempted',
                 'initiated_by' => $command->initiatedBy
             ]);
 
-            return $result;
+            return new RebillSubscriptionCommandResponse(
+                subscriptionId: $subscription->getSubscriptionId()->getValue(),
+                status: $subscription->getStatus()->getValue(),
+                transactionId: $transactionId,
+                amount: $rebillAmount->format(),
+                reason: $command->reason,
+                nextChargeDate: $subscription->getNextChargeDate()->format('Y-m-d'),
+                rebilledAt: (new \DateTimeImmutable())->format('c'),
+                gatewayProcessed: $command->processWithGateway,
+                events: [], // Domain events will be handled by event listeners
+                gatewayResult: $gatewayResultArray
+            );
 
         } catch (DomainException $e) {
             // Domain validation failed (e.g., subscription not active)

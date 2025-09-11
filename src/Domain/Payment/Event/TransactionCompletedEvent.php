@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Domain\Payment\Event;
 
 use App\Domain\Payment\ValueObject\PaymentStatus;
+use App\Domain\Shared\ValueObject\Money;
 
 final class TransactionCompletedEvent
 {
     public function __construct(
         public readonly string $transactionId,
-        public readonly float $amount,
-        public readonly string $currencyCode,
+        public readonly Money $amount,
         public readonly PaymentStatus $paymentStatus,
         public readonly string $usedToken,
         public readonly string $last4Digits,
@@ -27,8 +27,7 @@ final class TransactionCompletedEvent
 
         return new self(
             transactionId: $nmiResponse['transaction-id'] ?? '',
-            amount: (float) ($nmiResponse['amount'] ?? 0),
-            currencyCode: $nmiResponse['currency'] ?? 'USD',
+            amount: Money::fromFloat((float) ($nmiResponse['amount'] ?? 0), $nmiResponse['currency'] ?? 'USD'),
             paymentStatus: PaymentStatus::approved(),
             usedToken: $nmiResponse['token-id'] ?? '',
             last4Digits: $last4Digits,

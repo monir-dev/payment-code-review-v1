@@ -4,66 +4,57 @@ declare(strict_types=1);
 
 namespace App\Application\Service;
 
+use App\Application\Response\Gateway\CancelSubscriptionResponse;
+use App\Application\Response\Gateway\CompleteTransactionResponse;
+use App\Application\Response\Gateway\CreateCustomerVaultResponse;
+use App\Application\Response\Gateway\CreatePlanResponse;
+use App\Application\Response\Gateway\CreateSubscriptionResponse;
+use App\Application\Response\Gateway\InitializePaymentResponse;
+use App\Application\Response\Gateway\ProcessPaymentResponse;
+use App\Application\Response\Gateway\RebillResponse;
+use App\Application\Response\Gateway\RefundResponse;
 use App\Domain\Shared\ValueObject\BillingInformation;
+use App\Domain\Shared\ValueObject\Money;
 use App\Dto\CreatePlanDto;
 use DateTimeImmutable;
 
 interface PaymentGatewayInterface
 {
-    /**
-     * @return array{status: string, reason?: string, transaction_id?: string, decline_message?: string}
-     */
     public function processPayment(
         string $transactionId,
-        float $amount,
+        Money $amount,
         string $currency,
         BillingInformation $billingInformation,
         ?string $gatewayToken = null
-    ): array;
+    ): ProcessPaymentResponse;
 
-    /**
-     * @return array{status: string, transaction_id?: string, message?: string}
-     */
-    public function processRefund(string $originalTransactionId, float $refundAmount): array;
+    public function processRefund(string $originalTransactionId, Money $refundAmount): RefundResponse;
 
-    /**
-     * @return array{status: string, form_url?: string, message?: string}
-     */
     public function initializePayment(
-        float $amount,
+        Money $amount,
         string $currency,
         string $redirectUrl,
-        BillingInformation $billingInformation
-    ): array;
+        BillingInformation $billingInformation,
+        array $shippingInfo = []
+    ): InitializePaymentResponse;
 
-    /**
-     * @return array{status: string, plan_id?: string, message?: string}
-     */
-    public function createPlan(CreatePlanDto $planDto): array;
+    public function completeTransactionByTokenId(string $tokenId, ?string $subscriptionId = null): CompleteTransactionResponse;
+
+    public function createPlan(CreatePlanDto $planDto): CreatePlanResponse;
 
     /**
      * @param array<string, string> $billingInfo
-     * @return array{status: string, customer_vault_id?: string, message?: string}
      */
-    public function createCustomerVault(array $billingInfo): array;
+    public function createCustomerVault(array $billingInfo): CreateCustomerVaultResponse;
 
-    /**
-     * @return array{status: string, message?: string, already_cancelled?: bool}
-     */
-    public function cancelSubscription(string $subscriptionId): array;
+    public function cancelSubscription(string $subscriptionId): CancelSubscriptionResponse;
 
-    /**
-     * @return array{status: string, transaction_id?: string, amount?: float, message?: string}
-     */
-    public function processRebilling(string $subscriptionId, string $customerVaultId, ?float $amount = null): array;
+    public function processRebilling(string $subscriptionId, string $customerVaultId, ?Money $amount = null): RebillResponse;
 
-    /**
-     * @return array{status: string, subscription_id?: string, transaction_id?: string, message?: string}
-     */
     public function createSubscription(
         string $planId,
         string $customerVaultId,
         DateTimeImmutable $startDate,
         array $billingInfo = []
-    ): array;
+    ): CreateSubscriptionResponse;
 }

@@ -31,19 +31,19 @@ final class CreatePlanCommandHandler
         $planDto = new CreatePlanDto(
             planId: $planId,
             planName: $command->planName,
-            amount: $command->amount,
+            amount: $command->amount->getAmount(),
             frequency: $command->frequency,
             dayFrequency: $billingCycle->getDayFrequency() // Get from domain object
         );
 
         $nmiResult = $this->paymentGateway->createPlan($planDto);
 
-        if ($nmiResult['status'] !== 'success') {
-            throw new \Exception('NMI plan creation failed: ' . $nmiResult['message']);
+        if ($nmiResult->isFailed()) {
+            throw new \Exception('NMI plan creation failed: ' . $nmiResult->message);
         }
 
         $planIdObject = PlanId::fromString($planId);
-        $money = Money::fromFloat($command->amount, $command->currencyCode);
+        $money = $command->amount;
 
         $plan = Plan::create($planIdObject, $command->planName, $money, $billingCycle);
         $this->planRepository->save($plan);
@@ -51,11 +51,15 @@ final class CreatePlanCommandHandler
         return new CreatePlanCommandResponse(
             planId: $plan->getPlanId()->getValue(),
             planName: $plan->getName(),
-            amount: $plan->getAmount()->format(),
+            amount: $plan->getAmount(),
             frequency: $plan->getBillingCycle()->getFrequency(),
             dayFrequency: $plan->getBillingCycle()->getDayFrequency(),
             status: $plan->getStatus()->getValue(),
-            nmiResult: $nmiResult,
+            nmiResult: [
+                'status' => $nmiResult->status,
+                'planId' => $nmiResult->planId,
+                'message' => $nmiResult->message
+            ],
             events: $plan->getUncommittedEvents()
         );
     }

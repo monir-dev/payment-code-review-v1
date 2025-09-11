@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Service;
 
+use App\Domain\Shared\ValueObject\Money;
+
 use Symfony\Component\HttpFoundation\RequestStack;
 
 final class PaymentSessionService
@@ -40,12 +42,12 @@ final class PaymentSessionService
         }
     }
 
-    public function storePaymentSessionData(float $amount, ?array $subscriptionData = null): void
+    public function storePaymentSessionData(Money $amount, ?array $subscriptionData = null): void
     {
         $session = $this->requestStack->getCurrentRequest()?->getSession();
         
         if ($session) {
-            $session->set('payment_amount', $amount);
+            $session->set('payment_amount', $amount->getAmount());
             
             if ($subscriptionData) {
                 $session->set('subscription_data', $subscriptionData);

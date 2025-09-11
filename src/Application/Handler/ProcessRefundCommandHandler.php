@@ -47,19 +47,19 @@ final class ProcessRefundCommandHandler
                 $command->refundAmount
             );
 
-            if ($result['status'] === 'success') {
+            if ($result->isSuccessful()) {
                 $this->logger->info('Refund processed successfully', [
                     'original_transaction_id' => $command->transactionId,
-                    'refund_transaction_id' => $result['transaction_id'] ?? 'N/A',
-                    'refund_amount' => $command->refundAmount,
+                    'refund_transaction_id' => $result->transactionId ?? 'N/A',
+                    'refund_amount' => $command->refundAmount->format(),
                 ]);
 
                 // Fire domain event for successful refund
                 $event = new PaymentRefundedSuccessfullyEvent(
                     originalTransactionId: $command->transactionId,
-                    refundTransactionId: $result['transaction_id'] ?? '',
-                    refundAmount: $command->refundAmount,
-                    currency: 'USD' // Default currency, could be made configurable
+                    refundTransactionId: $result->transactionId ?? '',
+                    refundAmount: $command->refundAmount->getAmount(),
+                    currency: $command->refundAmount->getCurrency()->getCode()
                 );
 
                 $this->eventBus->publish($event);
@@ -67,17 +67,17 @@ final class ProcessRefundCommandHandler
             } else {
                 $this->logger->error('Refund processing failed', [
                     'original_transaction_id' => $command->transactionId,
-                    'refund_amount' => $command->refundAmount,
-                    'error_message' => $result['message'] ?? 'Unknown error',
+                    'refund_amount' => $command->refundAmount->format(),
+                    'error_message' => $result->message ?? 'Unknown error',
                 ]);
             }
 
             return new ProcessRefundCommandResponse(
-                status: $result['status'],
-                transactionId: $result['transaction_id'] ?? '',
-                refundAmount: $command->refundAmount,
+                status: $result->status,
+                transactionId: $result->transactionId ?? '',
+                refundAmount: $command->refundAmount->getAmount(),
                 originalTransactionId: $command->transactionId,
-                message: $result['message'] ?? null
+                message: $result->message ?? null
             );
         } catch (\Exception $e) {
             $this->logger->error('Refund processing exception', [
@@ -88,7 +88,7 @@ final class ProcessRefundCommandHandler
             return new ProcessRefundCommandResponse(
                 status: 'error',
                 transactionId: '',
-                refundAmount: $command->refundAmount,
+                refundAmount: $command->refundAmount->getAmount(),
                 originalTransactionId: $command->transactionId,
                 message: 'Failed to process refund: ' . $e->getMessage()
             );

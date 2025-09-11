@@ -81,7 +81,6 @@ final class Subscription
         $this->recordEvent(new SubscriptionCancelledEvent($this->subscriptionId, $reason));
     }
 
-
     public function processRebill(Money $amount, string $transactionId, string $reason = 'Manual rebill', ?DateTimeImmutable $processedAt = null): void
     {
         if (!$this->status->isActive()) {

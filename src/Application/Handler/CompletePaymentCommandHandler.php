@@ -7,10 +7,11 @@ namespace App\Application\Handler;
 use App\Application\Command\CompletePaymentCommand;
 use App\Application\Response\CompletePaymentCommandResponse;
 use App\Domain\Payment\Event\PaymentCompletedSuccessfullyEvent;
+use App\Domain\Payment\Event\TransactionCompletedEvent;
+use App\Application\Service\PaymentGatewayInterface;
+use App\Domain\Shared\ValueObject\Money;
 use App\Infrastructure\Event\DomainEventBus;
 use App\Infrastructure\Event\EventListenerRegistry;
-use App\Infrastructure\Event\PaymentCompletedEventListener;
-use App\Service\NmiPaymentGateway;
 use Psr\Log\LoggerInterface;
 
 final class CompletePaymentCommandHandler
@@ -18,7 +19,7 @@ final class CompletePaymentCommandHandler
     private bool $listenerRegistered = false;
 
     public function __construct(
-        private readonly NmiPaymentGateway $paymentGateway,
+        private readonly PaymentGatewayInterface $paymentGateway,
         private readonly DomainEventBus $eventBus,
         private readonly EventListenerRegistry $eventListenerRegistry,
         private readonly LoggerInterface $logger,
@@ -31,43 +32,54 @@ final class CompletePaymentCommandHandler
             // Register event listener if not already registered (to avoid circular dependencies)
             $this->ensureEventListenerRegistered();
 
-            // Complete the transaction through NMI
-            $result = $this->paymentGateway->completeTransactionByTokenId($command->tokenId);
+            // Complete the transaction with NMI
+            $gatewayResult = $this->paymentGateway->completeTransactionByTokenId($command->tokenId);
 
-            if ($result['status'] === 'success') {
-                $this->logger->info('Payment completed successfully', [
-                    'transaction_id' => $result['transaction_id'],
-                ]);
+            if ($gatewayResult->isSuccessful()) {
+                // Trigger TransactionCompletedEvent for database persistence
+                $transactionEvent = TransactionCompletedEvent::fromNmiResponse([
+                    'transaction-id' => $gatewayResult->transactionId,
+                    'amount' => (string)($gatewayResult->amount?->getAmount() ?? 0.0),
+                    'currency' => $gatewayResult->currency ?: 'USD',
+                    'token-id' => $gatewayResult->tokenId ?? '',
+                    'billing' => $gatewayResult->billingInfo ?? []
+                ], null);
 
-                // Fire domain event for successful payment using data from command
-                $event = new PaymentCompletedSuccessfullyEvent(
-                    transactionId: $result['transaction_id'],
-                    amount: $command->paymentAmount ?? 0.0,
-                    currency: 'USD', // Default currency, could be made configurable
-                    customerEmail: $command->subscriptionData['customer_email'] ?? '',
-                    billingInformation: $this->extractBillingInformation($command->subscriptionData),
-                    hasSubscriptionData: $command->subscriptionData !== null,
-                    subscriptionData: $command->subscriptionData
-                );
+                $this->eventBus->publish($transactionEvent);
 
-                $this->eventBus->publish($event);
+                // Trigger PaymentCompletedSuccessfullyEvent for subscription creation if applicable
+                if ($command->subscriptionData) {
+                    $billingInformation = $this->extractBillingInformation($command->subscriptionData);
 
-            } elseif ($result['status'] === 'declined') {
+                    $event = new PaymentCompletedSuccessfullyEvent(
+                        transactionId: $gatewayResult->transactionId,
+                        amount: $command->paymentAmount ?: ($gatewayResult->amount ?? Money::fromFloat(0.0, $gatewayResult->currency ?: 'USD')),
+                        customerEmail: $billingInformation['email'] ?? '',
+                        billingInformation: $billingInformation,
+                        hasSubscriptionData: $command->subscriptionData !== null,
+                        subscriptionData: $command->subscriptionData
+                    );
+
+                    $this->eventBus->publish($event);
+                }
+
+            } elseif ($gatewayResult->isDeclined()) {
                 $this->logger->warning('Payment declined', [
-                    'decline_message' => $result['decline_message'] ?? 'Payment declined'
+                    'decline_message' => $gatewayResult->declineMessage ?? 'Payment declined'
                 ]);
+
             } else {
                 $this->logger->error('Payment failed', [
-                    'error_message' => $result['error_message'] ?? 'Payment failed'
+                    'error_message' => $gatewayResult->errorMessage ?? 'Payment failed'
                 ]);
             }
 
             return new CompletePaymentCommandResponse(
-                status: $result['status'],
-                transactionId: $result['transaction_id'] ?? '',
-                message: $result['message'] ?? null,
-                declineMessage: $result['decline_message'] ?? null,
-                errorMessage: $result['error_message'] ?? null
+                status: $gatewayResult->status,
+                transactionId: $gatewayResult->transactionId,
+                message: null, // Gateway doesn't provide general message
+                declineMessage: $gatewayResult->declineMessage,
+                errorMessage: $gatewayResult->errorMessage
             );
         } catch (\Exception $e) {
             $this->logger->error('Payment completion exception', [
@@ -107,7 +119,7 @@ final class CompletePaymentCommandHandler
         if (!$this->listenerRegistered) {
             // Force EventListenerRegistry instantiation by accessing it
             // The registry constructor registers all event listeners automatically
-            get_class($this->eventListenerRegistry);
+            get_class($this->eventListenerRegistry); // lazy initialization trick, to prevent circular dependency
             $this->listenerRegistered = true;
         }
     }

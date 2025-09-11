@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Response;
 
+use App\Domain\Shared\ValueObject\Money;
+
 final class CreateSubscriptionCommandResponse
 {
     public function __construct(
@@ -13,7 +15,7 @@ final class CreateSubscriptionCommandResponse
         public readonly string $customerEmail,
         public readonly string $planId,
         public readonly string $planName,
-        public readonly float $amount,
+        public readonly Money $amount,
         public readonly string $frequency,
         public readonly string $startDate,
         public readonly string $nextChargeDate,
@@ -28,6 +30,6 @@ final class CreateSubscriptionCommandResponse
 
     public function getFormattedAmount(): string
     {
-        return '$' . number_format($this->amount, 2);
+        return '$' . number_format($this->amount->getAmount(), 2);
     }
 }

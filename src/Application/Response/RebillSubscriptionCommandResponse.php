@@ -15,23 +15,23 @@ final class RebillSubscriptionCommandResponse
         public readonly string $nextChargeDate,
         public readonly string $rebilledAt,
         public readonly bool $gatewayProcessed,
-        public readonly ?array $gatewayResult = null,
         public readonly array $events = [],
+        public readonly ?array $gatewayResult = null
     ) {
     }
 
     public function isSuccessful(): bool
     {
-        return !empty($this->transactionId);
+        return $this->status === 'active';
     }
 
-    public function wasProcessedWithGateway(): bool
+    public function isFailed(): bool
+    {
+        return in_array($this->status, ['cancelled', 'failed', 'suspended'], true);
+    }
+
+    public function wasGatewayProcessed(): bool
     {
         return $this->gatewayProcessed;
-    }
-
-    public function getGatewayStatus(): ?string
-    {
-        return $this->gatewayResult['status'] ?? null;
     }
 }

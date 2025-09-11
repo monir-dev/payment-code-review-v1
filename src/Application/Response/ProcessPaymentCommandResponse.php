@@ -10,22 +10,17 @@ final class ProcessPaymentCommandResponse
         public readonly string $status,
         public readonly string $transactionId,
         public readonly string $amount,
-        public readonly array $events = [],
+        public readonly array $events = []
     ) {
     }
 
-    public function isApproved(): bool
+    public function isSuccessful(): bool
     {
-        return $this->status === 'approved';
-    }
-
-    public function isDeclined(): bool
-    {
-        return $this->status === 'declined';
+        return in_array($this->status, ['approved', 'completed'], true);
     }
 
     public function isFailed(): bool
     {
-        return $this->status === 'failed';
+        return in_array($this->status, ['declined', 'failed', 'error'], true);
     }
 }

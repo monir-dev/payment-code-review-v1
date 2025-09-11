@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Application\Command;
 
+use App\Domain\Shared\ValueObject\Money;
+
 final class InitializePaymentCommand
 {
     public function __construct(
-        public readonly float $amount,
+        public readonly Money $amount,
         public readonly string $currency,
         public readonly string $redirectUrl,
         public readonly string $billingFirstName,

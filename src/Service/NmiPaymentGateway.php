@@ -2,12 +2,19 @@
 
 namespace App\Service;
 
+use App\Application\Response\Gateway\CancelSubscriptionResponse;
+use App\Application\Response\Gateway\CompleteTransactionResponse;
+use App\Application\Response\Gateway\CreateCustomerVaultResponse;
+use App\Application\Response\Gateway\CreatePlanResponse;
+use App\Application\Response\Gateway\CreateSubscriptionResponse;
+use App\Application\Response\Gateway\InitializePaymentResponse;
+use App\Application\Response\Gateway\ProcessPaymentResponse;
+use App\Application\Response\Gateway\RebillResponse;
+use App\Application\Response\Gateway\RefundResponse;
 use App\Application\Service\PaymentGatewayInterface;
-use App\Domain\Payment\Event\RebillTransactionCompletedEvent;
-use App\Domain\Payment\Event\TransactionCompletedEvent;
 use App\Domain\Shared\ValueObject\BillingInformation;
+use App\Domain\Shared\ValueObject\Money;
 use App\Dto\CreatePlanDto;
-use App\Infrastructure\Event\DomainEventBus;
 use Psr\Log\LoggerInterface;
 use DOMDocument;
 use SimpleXMLElement;
@@ -25,96 +32,57 @@ class NmiPaymentGateway implements PaymentGatewayInterface
 
     private LoggerInterface $logger;
     private HttpClientInterface $client;
-    private DomainEventBus $eventBus;
     private string $nmiApiKey;
 
     public function __construct(
         LoggerInterface $paymentLogger,
         HttpClientInterface $client,
-        DomainEventBus $eventBus,
         string $nmiApiKey,
     ) {
         $this->logger = $paymentLogger;
         $this->client = $client;
-        $this->eventBus = $eventBus;
         $this->nmiApiKey = $nmiApiKey;
     }
 
     public function processPayment(
         string $transactionId,
-        float $amount,
+        Money $amount,
         string $currency,
         BillingInformation $billingInformation,
         ?string $gatewayToken = null
-    ): array {
+    ): ProcessPaymentResponse {
         // Convert domain objects to NMI format
-        $billingInfo = [
-            'first_name' => $billingInformation->getFirstName(),
-            'last_name' => $billingInformation->getLastName(),
-            'address1' => $billingInformation->getAddress()->getStreet1(),
-            'address2' => $billingInformation->getAddress()->getStreet2(),
-            'city' => $billingInformation->getAddress()->getCity(),
-            'state' => $billingInformation->getAddress()->getState(),
-            'postal' => $billingInformation->getAddress()->getPostalCode(),
-            'country' => $billingInformation->getAddress()->getCountry(),
-            'phone' => $billingInformation->getPhone(),
-        ];
+        $billingInfo = $billingInformation->toArray();
 
         if ($gatewayToken) {
             // Complete an existing payment with token
-            $request = new \stdClass();
-            $request->token_id = $gatewayToken;
+            $result = $this->completeTransaction($gatewayToken);
 
-            $result = $this->completeTransaction($request);
-
-            return [
-                'status' => $result['status'] === 'success' ? 'success' : 'failed',
-                'transaction_id' => $result['transaction_id'] ?? '',
-                'reason' => $result['decline_message'] ?? $result['error_message'] ?? ''
-            ];
+            return new ProcessPaymentResponse(
+                status: $result->isSuccessful() ? 'success' : 'failed',
+                transactionId: $result->transactionId ?? '',
+                reason: $result->declineMessage ?? $result->errorMessage ?? '',
+                rawResponse: $result->rawResponse
+            );
         } else {
             // Initialize new payment
-            $result = $this->initializePaymentLegacy($amount, $currency, null, $billingInfo, []);
+            $result = $this->initializePayment($amount, $currency, null, $billingInformation, []);
 
-            return [
-                'status' => $result['status'] === 'success' ? 'success' : 'failed',
-                'reason' => $result['message'] ?? ''
-            ];
+            return new ProcessPaymentResponse(
+                status: $result->isSuccessful() ? 'success' : 'failed',
+                reason: $result->declineMessage ?? $result->errorMessage ?? '',
+                rawResponse: $result->rawResponse
+            );
         }
     }
 
     public function initializePayment(
-        float $amount,
+        Money $amount,
         string $currency,
-        string $redirectUrl,
-        BillingInformation $billingInformation
-    ): array {
-        $billingInfo = [
-            'first-name' => $billingInformation->getFirstName(),
-            'last-name' => $billingInformation->getLastName(),
-            'email' => $billingInformation->getEmail()->getValue(),
-            'address1' => $billingInformation->getAddress()->getStreet1(),
-            'address2' => $billingInformation->getAddress()->getStreet2(),
-            'city' => $billingInformation->getAddress()->getCity(),
-            'state' => $billingInformation->getAddress()->getState(),
-            'postal' => $billingInformation->getAddress()->getPostalCode(),
-            'country' => $billingInformation->getAddress()->getCountry(),
-            'phone' => $billingInformation->getPhone()
-        ];
-
-        return $this->initializePaymentLegacy($amount, $currency, $redirectUrl, $billingInfo, []);
-    }
-
-    /**
-     * Step 1: Initialize payment and get form URL (Legacy method)
-     */
-    public function initializePaymentLegacy(
-        $amount,
-        $currency = 'USD',
-        $redirectUrl = null,
-        array $billingInfo = [],
-        array $shippingInfo = [],
-    ) {
+        ?string $redirectUrl = null,
+        ?BillingInformation $billingInformation = null,
+        array $shippingInfo = []
+    ): InitializePaymentResponse {
         $xmlRequest = new DOMDocument('1.0', 'UTF-8');
         $xmlRequest->formatOutput = true;
         $xmlSale = $xmlRequest->createElement('sale');
@@ -122,7 +90,7 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         // Required fields
         $this->appendXmlNode($xmlRequest, $xmlSale, 'api-key', $this->nmiApiKey);
         $this->appendXmlNode($xmlRequest, $xmlSale, 'redirect-url', $redirectUrl ?: $_SERVER['HTTP_REFERER']);
-        $this->appendXmlNode($xmlRequest, $xmlSale, 'amount', number_format($amount, 2, '.', ''));
+        $this->appendXmlNode($xmlRequest, $xmlSale, 'amount', number_format($amount->getAmount(), 2, '.', ''));
         $this->appendXmlNode($xmlRequest, $xmlSale, 'ip-address', $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
         $this->appendXmlNode($xmlRequest, $xmlSale, 'currency', $currency);
 
@@ -133,10 +101,13 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         $this->appendXmlNode($xmlRequest, $xmlSale, 'shipping-amount', '0.00');
 
         // Billing information
-        if (!empty($billingInfo)) {
+        if ($billingInformation) {
+            $billingInfo = $billingInformation->toArray();
             $xmlBillingAddress = $xmlRequest->createElement('billing');
             foreach ($billingInfo as $key => $value) {
-                $this->appendXmlNode($xmlRequest, $xmlBillingAddress, $key, $value);
+                if ($value !== null) {
+                    $this->appendXmlNode($xmlRequest, $xmlBillingAddress, $key, $value);
+                }
             }
             $xmlSale->appendChild($xmlBillingAddress);
         }
@@ -152,36 +123,102 @@ class NmiPaymentGateway implements PaymentGatewayInterface
 
         $xmlRequest->appendChild($xmlSale);
 
+        // Log the outgoing XML request for debugging
+        $xmlString = $xmlRequest->saveXML();
+        $this->logger->info('NMI Payment Initialization Request', [
+            'xml_request' => $xmlString,
+            'amount' => $amount->getAmount(),
+            'currency' => $currency,
+            'has_billing_info' => $billingInformation !== null
+        ]);
+
         // Send request
         $data = $this->sendApiRequest($xmlRequest, self::NMI_THREE_STEP_URL);
 
+        // Log the raw response for debugging
+        $this->logger->info('NMI Payment Initialization Raw Response', [
+            'raw_response' => $data,
+            'response_length' => strlen($data)
+        ]);
+
         // Parse response
         $gwResponse = @new SimpleXMLElement($data);
-        if ((string)$gwResponse->result == 1) {
-            return [
-                'status' => 'success',
-                'form_url' => (string)$gwResponse->{'form-url'},
-            ];
-        } else {
-            $this->logger->error('Step 1 failed', ['response' => $data]);
+        
+        if ($gwResponse === false) {
+            $this->logger->error('Failed to parse NMI XML response', [
+                'raw_response' => $data,
+                'xml_errors' => libxml_get_errors()
+            ]);
+            return new InitializePaymentResponse(
+                status: 'error',
+                message: 'Payment initialization failed: Invalid response from payment gateway'
+            );
+        }
 
-            return [
-                'status' => 'error',
-                'message' => 'Failed to initialize payment',
-            ];
+        $result = (string)$gwResponse->result;
+        $this->logger->info('NMI Response Parsed', [
+            'result' => $result,
+            'responsetext' => (string)($gwResponse->responsetext ?? 'no responsetext'),
+            'form_url' => (string)($gwResponse->{'form-url'} ?? 'no form-url'),
+            'all_elements' => array_keys((array)$gwResponse)
+        ]);
+
+        if ($result == '1') {
+            $formUrl = (string)$gwResponse->{'form-url'};
+            if (empty($formUrl)) {
+                $this->logger->error('NMI success response missing form URL', [
+                    'response' => $data,
+                    'parsed_elements' => (array)$gwResponse
+                ]);
+                return new InitializePaymentResponse(
+                    status: 'error',
+                    message: 'Payment initialization failed: No form URL received'
+                );
+            }
+            
+            return new InitializePaymentResponse(
+                status: 'success',
+                formUrl: $formUrl
+            );
+        } else {
+            $responseText = (string)($gwResponse->responsetext ?? '');
+            if (empty($responseText)) {
+                // Check for other possible error fields (NMI uses result-text not responsetext)
+                $possibleErrors = [
+                    'result-text' => (string)($gwResponse->{'result-text'} ?? ''),
+                    'error' => (string)($gwResponse->error ?? ''),
+                    'message' => (string)($gwResponse->message ?? ''),
+                    'errortext' => (string)($gwResponse->errortext ?? '')
+                ];
+                $responseText = implode(', ', array_filter($possibleErrors));
+                if (empty($responseText)) {
+                    $responseText = 'No error message provided by payment gateway';
+                }
+            }
+            
+            $this->logger->error('NMI Payment Initialization Failed', [
+                'result' => $result,
+                'responsetext' => $responseText,
+                'raw_response' => $data,
+                'parsed_response' => (array)$gwResponse
+            ]);
+
+            return new InitializePaymentResponse(
+                status: 'error',
+                message: 'Payment initialization failed: ' . $responseText
+            );
         }
     }
 
     /**
      * Step 3: Complete transaction with token
      */
-    public function completeTransaction($request)
+    public function completeTransaction(string $tokenId): CompleteTransactionResponse
     {
-        $tokenId = $request->get('token-id');
         return $this->completeTransactionByTokenId($tokenId);
     }
 
-    public function completeTransactionByTokenId(string $tokenId, ?string $subscriptionId = null): array
+    public function completeTransactionByTokenId(string $tokenId, ?string $subscriptionId = null): CompleteTransactionResponse
     {
         $xmlRequest = new DOMDocument('1.0', 'UTF-8');
         $xmlRequest->formatOutput = true;
@@ -201,36 +238,33 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         if ((string)$gwResponse->result == 1) {
             $transactionId = (string)$gwResponse->{'transaction-id'};
 
-            // Publish transaction completed event instead of direct database operations
-            $event = TransactionCompletedEvent::fromNmiResponse([
-                'transaction-id' => $transactionId,
-                'amount' => (string)$gwResponse->{'amount'},
-                'currency' => (string)$gwResponse->{'currency'} ?: 'USD',
-                'token-id' => (string)$gwResponse->{'token-id'},
-                'billing' => ['cc-number' => (string)$gwResponse->billing->{'cc-number'}]
-            ], $subscriptionId);
-
-            $this->eventBus->publish($event);
-
-            return [
-                'status' => 'success',
-                'transaction_id' => $transactionId,
-                'response' => $gwResponse,
-            ];
+            return new CompleteTransactionResponse(
+                status: 'success',
+                transactionId: $transactionId,
+                amount: Money::fromFloat((float)(string)$gwResponse->{'amount'}, (string)$gwResponse->{'currency'} ?: 'USD'),
+                currency: (string)$gwResponse->{'currency'} ?: 'USD',
+                tokenId: (string)$gwResponse->{'token-id'},
+                billingInfo: ['cc-number' => (string)$gwResponse->billing->{'cc-number'}],
+                rawResponse: json_decode(json_encode($gwResponse), true)
+            );
         } elseif ((string)$gwResponse->result == 2) {
             $this->logger->warning('Payment declined', ['response' => $data]);
 
-            return [
-                'status' => 'declined',
-                'decline_message' => (string)$gwResponse->{'result-text'},
-            ];
+            return new CompleteTransactionResponse(
+                status: 'declined',
+                transactionId: '',
+                declineMessage: (string)$gwResponse->{'result-text'},
+                rawResponse: json_decode(json_encode($gwResponse), true)
+            );
         } else {
             $this->logger->error('Payment error', ['response' => $data]);
 
-            return [
-                'status' => 'error',
-                'error_message' => (string)$gwResponse->{'result-text'},
-            ];
+            return new CompleteTransactionResponse(
+                status: 'error',
+                transactionId: '',
+                errorMessage: (string)$gwResponse->{'result-text'},
+                rawResponse: json_decode(json_encode($gwResponse), true)
+            );
         }
     }
 
@@ -255,7 +289,7 @@ class NmiPaymentGateway implements PaymentGatewayInterface
     /**
      * Helper function to append XML nodes
      */
-    private function appendXmlNode($domDocument, $parentNode, $name, $value)
+    private function appendXmlNode(DOMDocument $domDocument, \DOMElement $parentNode, string $name, string $value): void
     {
         $childNode = $domDocument->createElement($name);
         $childNodeValue = $domDocument->createTextNode($value);
@@ -263,7 +297,7 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         $parentNode->appendChild($childNode);
     }
 
-    public function createPlan(CreatePlanDto $planDto): array
+    public function createPlan(CreatePlanDto $planDto): CreatePlanResponse
     {
         // Use form POST data instead of XML for transact.php endpoint
         $formData = [
@@ -296,15 +330,18 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                     'response' => $responseData['responsetext'] ?? ''
                 ]);
 
-                return [
-                    'status' => 'success',
-                    'message' => $responseData['responsetext'] ?? 'Plan created successfully',
-                ];
+                return new CreatePlanResponse(
+                    status: 'success',
+                    planId: $planDto->planId,
+                    message: $responseData['responsetext'] ?? 'Plan created successfully',
+                    rawResponse: $responseData
+                );
             } else {
-                return [
-                    'status' => 'error',
-                    'message' => $responseData['responsetext'] ?? 'Failed to create plan',
-                ];
+                return new CreatePlanResponse(
+                    status: 'error',
+                    message: $responseData['responsetext'] ?? 'Failed to create plan',
+                    rawResponse: $responseData
+                );
             }
         } catch (Exception $e) {
             $this->logger->error('NMI Plan creation API call failed', [
@@ -313,14 +350,14 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                 'plan_name' => $planDto->planName,
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Failed to create plan: ' . $e->getMessage(),
-            ];
+            return new CreatePlanResponse(
+                status: 'error',
+                message: 'Failed to create plan: ' . $e->getMessage()
+            );
         }
     }
 
-    public function createCustomerVault(array $billingInfo): array
+    public function createCustomerVault(array $billingInfo): CreateCustomerVaultResponse
     {
         $formData = [
             'security_key' => $this->nmiApiKey,
@@ -357,30 +394,32 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                     'response' => $responseData['responsetext'] ?? ''
                 ]);
 
-                return [
-                    'status' => 'success',
-                    'customer_vault_id' => $responseData['customer_vault_id'],
-                    'message' => 'Customer vault created successfully',
-                ];
+                return new CreateCustomerVaultResponse(
+                    status: 'success',
+                    customerVaultId: $responseData['customer_vault_id'],
+                    message: 'Customer vault created successfully',
+                    rawResponse: $responseData
+                );
             } else {
                 $this->logger->warning('Customer vault creation failed', [
                     'response' => $responseData
                 ]);
 
-                return [
-                    'status' => 'error',
-                    'message' => $responseData['responsetext'] ?? 'Failed to create customer vault',
-                ];
+                return new CreateCustomerVaultResponse(
+                    status: 'error',
+                    message: $responseData['responsetext'] ?? 'Failed to create customer vault',
+                    rawResponse: $responseData
+                );
             }
         } catch (Exception $e) {
             $this->logger->error('Customer vault creation exception', [
                 'message' => $e->getMessage()
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Failed to create customer vault: ' . $e->getMessage(),
-            ];
+            return new CreateCustomerVaultResponse(
+                status: 'error',
+                message: 'Failed to create customer vault: ' . $e->getMessage()
+            );
         }
     }
 
@@ -389,7 +428,7 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         string $customerVaultId,
         \DateTimeImmutable $startDate,
         array $billingInfo = []
-    ): array {
+    ): CreateSubscriptionResponse {
         $formData = [
             'security_key' => $this->nmiApiKey,
             'recurring' => 'add_subscription',
@@ -427,12 +466,13 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                     'start_date' => $startDate->format('Y-m-d')
                 ]);
 
-                return [
-                    'status' => 'success',
-                    'subscription_id' => $responseData['subscription_id'] ?? '',
-                    'transaction_id' => $responseData['transactionid'] ?? '',
-                    'message' => 'Subscription created successfully with NMI',
-                ];
+                return new CreateSubscriptionResponse(
+                    status: 'success',
+                    subscriptionId: $responseData['subscription_id'] ?? '',
+                    transactionId: $responseData['transactionid'] ?? '',
+                    message: 'Subscription created successfully with NMI',
+                    rawResponse: $responseData
+                );
             } else {
                 $this->logger->warning('NMI subscription creation failed', [
                     'plan_id' => $planId,
@@ -440,10 +480,11 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                     'response' => $responseData
                 ]);
 
-                return [
-                    'status' => 'error',
-                    'message' => $responseData['responsetext'] ?? 'Failed to create subscription with NMI',
-                ];
+                return new CreateSubscriptionResponse(
+                    status: 'error',
+                    message: $responseData['responsetext'] ?? 'Failed to create subscription with NMI',
+                    rawResponse: $responseData
+                );
             }
         } catch (Exception $e) {
             $this->logger->error('Subscription creation exception', [
@@ -452,14 +493,14 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                 'message' => $e->getMessage()
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Failed to create subscription: ' . $e->getMessage(),
-            ];
+            return new CreateSubscriptionResponse(
+                status: 'error',
+                message: 'Failed to create subscription: ' . $e->getMessage()
+            );
         }
     }
 
-    public function cancelSubscription(string $subscriptionId): array
+    public function cancelSubscription(string $subscriptionId): CancelSubscriptionResponse
     {
         $formData = [
             'security_key' => $this->nmiApiKey,
@@ -486,10 +527,10 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                     'response' => $responseData['responsetext'] ?? ''
                 ]);
 
-                return [
-                    'status' => 'success',
-                    'message' => 'Subscription cancelled successfully with NMI',
-                ];
+                return new CancelSubscriptionResponse(
+                    status: 'success',
+                    message: 'Subscription cancelled successfully with NMI'
+                );
             } else {
                 // Handle case where subscription was already cancelled in NMI
                 $errorMessage = $responseData['responsetext'] ?? '';
@@ -499,11 +540,11 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                         'response' => $responseData
                     ]);
 
-                    return [
-                        'status' => 'success',
-                        'message' => 'Subscription was already cancelled (syncing local status)',
-                        'already_cancelled' => true,
-                    ];
+                    return new CancelSubscriptionResponse(
+                        status: 'success',
+                        message: 'Subscription was already cancelled (syncing local status)',
+                        alreadyCancelled: true
+                    );
                 }
 
                 $this->logger->warning('NMI subscription cancellation failed', [
@@ -511,10 +552,10 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                     'response' => $responseData
                 ]);
 
-                return [
-                    'status' => 'error',
-                    'message' => $errorMessage ?: 'Failed to cancel subscription with NMI',
-                ];
+                return new CancelSubscriptionResponse(
+                    status: 'error',
+                    message: $errorMessage ?: 'Failed to cancel subscription with NMI'
+                );
             }
         } catch (Exception $e) {
             $this->logger->error('Subscription cancellation exception', [
@@ -522,20 +563,21 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                 'message' => $e->getMessage()
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Failed to cancel subscription: ' . $e->getMessage(),
-            ];
+            return new CancelSubscriptionResponse(
+                status: 'error',
+                message: 'Failed to cancel subscription: ' . $e->getMessage()
+            );
         }
     }
 
-    public function processRebilling(string $subscriptionId, string $customerVaultId, float $amount = null): array
+    public function processRebilling(string $subscriptionId, string $customerVaultId, ?Money $amount = null): RebillResponse
     {
         if (empty($customerVaultId)) {
-            return [
-                'status' => 'error',
-                'message' => 'Customer vault ID is required for rebilling. Subscription may need to be recreated.',
-            ];
+            return new RebillResponse(
+                status: 'error',
+                subscriptionId: $subscriptionId,
+                message: 'Customer vault ID is required for rebilling. Subscription may need to be recreated.'
+            );
         }
 
         $formData = [
@@ -545,7 +587,7 @@ class NmiPaymentGateway implements PaymentGatewayInterface
         ];
 
         if ($amount) {
-            $formData['amount'] = number_format($amount, 2, '.', '');
+            $formData['amount'] = number_format($amount->getAmount(), 2, '.', '');
         }
 
         try {
@@ -563,31 +605,22 @@ class NmiPaymentGateway implements PaymentGatewayInterface
 
             if (($responseData['response'] ?? '') == '1') {
                 $transactionId = $responseData['transactionid'] ?? '';
-                $processedAmount = (float)($responseData['amount'] ?? $amount ?? 0);
+                $processedAmount = (float)($responseData['amount'] ?? $amount?->getAmount() ?? 0);
 
-                // Publish rebill transaction event instead of direct database operations
-                if ($transactionId) {
-                    $event = RebillTransactionCompletedEvent::fromNmiRebillResponse([
-                        'transactionid' => $transactionId,
-                        'amount' => (string)$processedAmount
-                    ], $subscriptionId);
-
-                    $this->eventBus->publish($event);
-                }
-
-                $this->logger->info('Rebilling processed successfully - event published for database persistence', [
+                $this->logger->info('Rebilling processed successfully', [
                     'subscription_id' => $subscriptionId,
                     'customer_vault_id' => $customerVaultId,
                     'transaction_id' => $transactionId,
                     'amount' => $processedAmount
                 ]);
 
-                return [
-                    'status' => 'success',
-                    'transaction_id' => $transactionId,
-                    'amount' => $processedAmount,
-                    'message' => 'Rebilling processed successfully',
-                ];
+                return new RebillResponse(
+                    status: 'success',
+                    transactionId: $transactionId,
+                    amount: Money::fromFloat($processedAmount, 'USD'),
+                    subscriptionId: $subscriptionId,
+                    message: 'Rebilling processed successfully'
+                );
             } else {
                 $this->logger->warning('Rebilling failed via customer vault', [
                     'subscription_id' => $subscriptionId,
@@ -595,10 +628,11 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                     'response' => $responseData
                 ]);
 
-                return [
-                    'status' => 'declined',
-                    'message' => $responseData['responsetext'] ?? 'Rebilling failed',
-                ];
+                return new RebillResponse(
+                    status: 'declined',
+                    subscriptionId: $subscriptionId,
+                    message: $responseData['responsetext'] ?? 'Rebilling failed'
+                );
             }
         } catch (Exception $e) {
             $this->logger->error('Rebilling exception', [
@@ -607,17 +641,23 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                 'message' => $e->getMessage()
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Failed to process rebilling: ' . $e->getMessage(),
-            ];
+            return new RebillResponse(
+                status: 'error',
+                subscriptionId: $subscriptionId,
+                message: 'Failed to process rebilling: ' . $e->getMessage()
+            );
         }
     }
 
-    public function processRefund(string $originalTransactionId, float $refundAmount): array
+    public function processRefund(string $originalTransactionId, Money $refundAmount): RefundResponse
     {
-        if ($refundAmount <= 0) {
-            return ['status' => 'error', 'message' => 'Refund amount must be positive.'];
+        if ($refundAmount->isZero()) {
+            return new RefundResponse(
+                status: 'error',
+                refundAmount: $refundAmount->getAmount(),
+                originalTransactionId: $originalTransactionId,
+                message: 'Refund amount must be positive.'
+            );
         }
 
         $xmlRequest = new DOMDocument('1.0', 'UTF-8');
@@ -627,7 +667,7 @@ class NmiPaymentGateway implements PaymentGatewayInterface
 
         $this->appendXmlNode($xmlRequest, $xmlRefund, 'api-key', $this->nmiApiKey);
         $this->appendXmlNode($xmlRequest, $xmlRefund, 'transaction-id', $originalTransactionId);
-        $this->appendXmlNode($xmlRequest, $xmlRefund, 'amount', $refundAmount);
+        $this->appendXmlNode($xmlRequest, $xmlRefund, 'amount', $refundAmount->getAmount());
 
         $xmlRequest->appendChild($xmlRefund);
 
@@ -643,7 +683,12 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                 ],
             );
 
-            return ['status' => 'success', 'transaction_id' => (string)$gwResponse->{'transaction-id'}];
+            return new RefundResponse(
+                status: 'success',
+                transactionId: (string)$gwResponse->{'transaction-id'},
+                refundAmount: $refundAmount->getAmount(),
+                originalTransactionId: $originalTransactionId
+            );
         } else {
             $message = (string)$gwResponse->{'responsetext'} ?? 'Refund failed.';
             $this->logger->warning(
@@ -651,7 +696,12 @@ class NmiPaymentGateway implements PaymentGatewayInterface
                 ['response_text' => $message, 'original_transaction_id' => $originalTransactionId],
             );
 
-            return ['status' => 'error', 'message' => $message];
+            return new RefundResponse(
+                status: 'error',
+                refundAmount: $refundAmount->getAmount(),
+                originalTransactionId: $originalTransactionId,
+                message: $message
+            );
         }
     }
 

@@ -76,13 +76,13 @@ final class CreateSubscriptionCommandHandler
 
             $vaultResult = $this->paymentGateway->createCustomerVault($billingInfo);
 
-            if ($vaultResult['status'] !== 'success') {
+            if ($vaultResult->isFailed()) {
                 throw new InvalidArgumentException(
-                    'Failed to create customer vault: ' . ($vaultResult['message'] ?? 'Unknown error')
+                    'Failed to create customer vault: ' . ($vaultResult->message ?? 'Unknown error')
                 );
             }
 
-            $customerVaultId = $vaultResult['customer_vault_id'];
+            $customerVaultId = $vaultResult->customerVaultId;
         }
 
         // Create subscription with NMI API
@@ -108,13 +108,13 @@ final class CreateSubscriptionCommandHandler
             $billingInfo
         );
 
-        if ($nmiResult['status'] !== 'success') {
+        if ($nmiResult->isFailed()) {
             throw new InvalidArgumentException(
-                'Failed to create subscription with NMI: ' . ($nmiResult['message'] ?? 'Unknown error')
+                'Failed to create subscription with NMI: ' . ($nmiResult->message ?? 'Unknown error')
             );
         }
 
-        $nmiSubscriptionId = $nmiResult['subscription_id'];
+        $nmiSubscriptionId = $nmiResult->subscriptionId;
         if (empty($nmiSubscriptionId)) {
             throw new InvalidArgumentException('NMI subscription ID not returned from gateway');
         }
@@ -141,7 +141,7 @@ final class CreateSubscriptionCommandHandler
             customerEmail: $subscription->getBillingInformation()->getEmail()->getValue(),
             planId: $subscription->getPlan()->getPlanId()->getValue(),
             planName: $subscription->getPlan()->getName(),
-            amount: $subscription->getAmount()->getAmount(),
+            amount: $subscription->getAmount(),
             frequency: $subscription->getPlan()->getBillingCycle()->getFrequency(),
             startDate: $subscription->getStartDate()->format('Y-m-d'),
             nextChargeDate: $subscription->getNextChargeDate()->format('Y-m-d'),

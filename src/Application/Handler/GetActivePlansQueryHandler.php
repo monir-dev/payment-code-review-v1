@@ -3,6 +3,7 @@
 namespace App\Application\Handler;
 
 use App\Application\Query\GetActivePlansQuery;
+use App\Application\Response\GetActivePlansQueryResponse;
 use App\Domain\Billing\Repository\PlanRepositoryInterface;
 
 class GetActivePlansQueryHandler
@@ -12,11 +13,10 @@ class GetActivePlansQueryHandler
     ) {
     }
 
-    /**
-     * @return array<\App\Domain\Billing\Entity\Plan>
-     */
-    public function handle(GetActivePlansQuery $query): array
+    public function handle(GetActivePlansQuery $query): GetActivePlansQueryResponse
     {
-        return $this->planRepository->findActivePlans();
+        return new GetActivePlansQueryResponse(
+            plans: $this->planRepository->findActivePlans()
+        );
     }
 }

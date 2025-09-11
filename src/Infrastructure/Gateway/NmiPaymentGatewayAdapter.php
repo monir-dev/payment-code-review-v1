@@ -17,7 +17,7 @@ use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Shared\ValueObject\BillingInformation;
 use App\Domain\Shared\ValueObject\Money;
 use App\Service\NmiPaymentGateway;
-use App\Dto\CreatePlanDto;
+use App\Domain\Billing\Dto\CreatePlanDto;
 use Exception;
 use Psr\Log\LoggerInterface;
 

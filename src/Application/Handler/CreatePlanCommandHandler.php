@@ -12,7 +12,7 @@ use App\Domain\Billing\Repository\PlanRepositoryInterface;
 use App\Domain\Billing\ValueObject\PlanId;
 use App\Domain\Shared\ValueObject\Money;
 use App\Domain\Subscription\ValueObject\BillingCycle;
-use App\Dto\CreatePlanDto;
+use App\Domain\Billing\Dto\CreatePlanDto;
 
 final class CreatePlanCommandHandler
 {

@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-use App\Dto\CreatePlanDto;
+use App\Domain\Billing\Dto\CreatePlanDto;
 use App\Entity\Plan;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;

@@ -15,7 +15,7 @@ use App\Application\Response\Gateway\RebillResponse;
 use App\Application\Response\Gateway\RefundResponse;
 use App\Domain\Shared\ValueObject\BillingInformation;
 use App\Domain\Shared\ValueObject\Money;
-use App\Dto\CreatePlanDto;
+use App\Domain\Billing\Dto\CreatePlanDto;
 use DateTimeImmutable;
 
 interface PaymentGatewayInterface

@@ -14,7 +14,7 @@ use App\Application\Response\Gateway\RefundResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Shared\ValueObject\BillingInformation;
 use App\Domain\Shared\ValueObject\Money;
-use App\Dto\CreatePlanDto;
+use App\Domain\Billing\Dto\CreatePlanDto;
 use Psr\Log\LoggerInterface;
 use DOMDocument;
 use SimpleXMLElement;

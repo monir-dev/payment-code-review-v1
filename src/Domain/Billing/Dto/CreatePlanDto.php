@@ -1,8 +1,10 @@
 <?php
 
-namespace App\Dto;
+declare(strict_types=1);
 
-class CreatePlanDto
+namespace App\Domain\Billing\Dto;
+
+final class CreatePlanDto
 {
     public readonly string $planId;
     public readonly string $planName;

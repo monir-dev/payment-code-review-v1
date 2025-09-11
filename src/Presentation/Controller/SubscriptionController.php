@@ -72,7 +72,7 @@ final class SubscriptionController extends AbstractController
                         postalCode: $data['billing_postal'],
                         country: $data['billing_country'],
                         phone: $data['billing_phone'] ?? null,
-                        startDate: $data['start_date'] ?? new DateTimeImmutable()
+                        startDate: $data['start_date'] ?? new DateTimeImmutable('+1 day')
                     )
                 );
 
@@ -223,7 +223,7 @@ final class SubscriptionController extends AbstractController
                     postalCode: $data['postalCode'],
                     country: $data['country'],
                     phone: $data['phone'] ?? null,
-                    startDate: isset($data['startDate']) ? new DateTimeImmutable($data['startDate']) : new DateTimeImmutable()
+                    startDate: isset($data['startDate']) ? new DateTimeImmutable($data['startDate']) : new DateTimeImmutable('+1 day')
                 )
             );
 
@@ -266,7 +266,8 @@ final class SubscriptionController extends AbstractController
     public function apiCancel(string $id, Request $request): JsonResponse
     {
         try {
-            $data = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
+            $content = $request->getContent();
+            $data = $content ? json_decode($content, true, 512, JSON_THROW_ON_ERROR) : [];
 
             // Create cancellation command
             $command = new CancelSubscriptionCommand(
@@ -325,7 +326,8 @@ final class SubscriptionController extends AbstractController
     public function apiRebill(string $id, Request $request): JsonResponse
     {
         try {
-            $data = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
+            $content = $request->getContent();
+            $data = $content ? json_decode($content, true, 512, JSON_THROW_ON_ERROR) : [];
 
             $command = new RebillSubscriptionCommand(
                 subscriptionId: $id,

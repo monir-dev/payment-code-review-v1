@@ -78,14 +78,14 @@ final class SubscriptionController extends AbstractController
 
                 $this->addFlash('success', sprintf(
                     'Subscription created successfully! ID: %s, Next charge: %s',
-                    $result['subscription_id'],
-                    $result['next_charge_date']
+                    $result->subscriptionId,
+                    $result->nextChargeDate
                 ));
 
                 $this->logger->info('Subscription created via DDD', [
-                    'subscription_id' => $result['subscription_id'],
-                    'plan_name' => $result['plan_name'],
-                    'amount' => $result['amount']
+                    'subscription_id' => $result->subscriptionId,
+                    'plan_name' => $result->planName,
+                    'amount' => $result->amount
                 ]);
 
                 return $this->redirectToRoute('app_subscription_index');
@@ -120,13 +120,13 @@ final class SubscriptionController extends AbstractController
 
             $this->addFlash('success', sprintf(
                 'Subscription cancelled successfully! Status: %s',
-                $result['status']
+                $result->newStatus
             ));
 
             $this->logger->info('Subscription cancelled via DDD command', [
-                'subscription_id' => $result['subscription_id'],
-                'reason' => $result['reason'],
-                'gateway_cancelled' => $result['gateway_cancelled']
+                'subscription_id' => $result->subscriptionId,
+                'reason' => $result->reason,
+                'gateway_cancelled' => $result->gatewayProcessed
             ]);
 
             return $this->redirectToRoute('app_subscription_index');
@@ -269,14 +269,20 @@ final class SubscriptionController extends AbstractController
             $result = $this->cancelSubscriptionHandler->handle($command);
 
             $this->logger->info('Subscription cancelled via API', [
-                'subscription_id' => $result['subscription_id'],
-                'reason' => $result['reason'],
+                'subscription_id' => $result->subscriptionId,
+                'reason' => $result->reason,
                 'cancelled_by' => $command->cancelledBy
             ]);
 
             return new JsonResponse([
                 'success' => true,
-                'subscription' => $result
+                'subscription' => [
+                    'subscription_id' => $result->subscriptionId,
+                    'status' => $result->newStatus,
+                    'reason' => $result->reason,
+                    'cancelled_at' => $result->cancelledAt,
+                    'gateway_processed' => $result->gatewayProcessed
+                ]
             ], 200);
 
         } catch (JsonException $e) {

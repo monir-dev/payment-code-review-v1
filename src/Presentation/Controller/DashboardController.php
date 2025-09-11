@@ -25,8 +25,20 @@ final class DashboardController extends AbstractController
             activeSubscriptionsLimit: 5
         );
 
-        $dashboardData = $this->getDashboardStatsHandler->handle($getDashboardStatsQuery);
+        $dashboardResponse = $this->getDashboardStatsHandler->handle($getDashboardStatsQuery);
 
-        return $this->render('dashboard/index.html.twig', $dashboardData);
+        return $this->render('dashboard/index.html.twig', [
+            'stats' => [
+                'total_subscriptions' => $dashboardResponse->stats->totalSubscriptions,
+                'active_subscriptions' => $dashboardResponse->stats->activeSubscriptions,
+                'cancelled_subscriptions' => $dashboardResponse->stats->cancelledSubscriptions,
+                'total_transactions' => $dashboardResponse->stats->totalTransactions,
+                'total_revenue' => $dashboardResponse->stats->totalRevenue,
+                'refunded_transactions' => $dashboardResponse->stats->refundedTransactions,
+                'partially_refunded_transactions' => $dashboardResponse->stats->partiallyRefundedTransactions,
+            ],
+            'recent_transactions' => $dashboardResponse->recentTransactions,
+            'active_subscriptions' => $dashboardResponse->activeSubscriptions,
+        ]);
     }
 }

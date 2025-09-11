@@ -50,13 +50,13 @@ class PaymentController extends AbstractController
 
             $result = $this->completePaymentHandler->handle($completePaymentCommand);
 
-            if ($result['status'] === 'success') {
-                $this->addFlash('success', 'Payment successful! Transaction ID: ' . $result['transaction_id']);
+            if ($result->isSuccessful()) {
+                $this->addFlash('success', 'Payment successful! Transaction ID: ' . $result->transactionId);
                 $this->paymentSessionService->clearPaymentSessionData();
-            } elseif ($result['status'] === 'declined') {
-                $this->addFlash('danger', 'Payment declined: ' . ($result['decline_message'] ?? 'Payment declined'));
+            } elseif ($result->isDeclined()) {
+                $this->addFlash('danger', 'Payment declined: ' . ($result->declineMessage ?? 'Payment declined'));
             } else {
-                $this->addFlash('danger', 'Payment failed: ' . ($result['error_message'] ?? 'Payment failed'));
+                $this->addFlash('danger', 'Payment failed: ' . ($result->errorMessage ?? 'Payment failed'));
             }
 
             return $this->redirectToRoute('app_checkout');
@@ -151,7 +151,7 @@ class PaymentController extends AbstractController
             // Handle payment initialization through command handler
             $result = $this->initializePaymentHandler->handle($initializePaymentCommand);
 
-            if ($result['status'] === 'success') {
+            if ($result->isSuccessful()) {
                 // Store payment amount and subscription data using PaymentSessionService
                 $subscriptionData = null;
                 if ($selectedPlan) {
@@ -174,7 +174,7 @@ class PaymentController extends AbstractController
 
                 // Create Step 2 form with the NMI form URL as action
                 $step2Form = $this->createForm(Step2Type::class, null, [
-                    'action' => $result['form_url']
+                    'action' => $result->gatewayResponse['form_url'] ?? ''
                 ]);
 
                 // Render Step 2 form
@@ -208,11 +208,11 @@ class PaymentController extends AbstractController
 
             $result = $this->processRefundHandler->handle($processRefundCommand);
 
-            if ($result['status'] === 'success') {
-                $this->addFlash('success', 'Refund successful! New Transaction ID: ' . $result['transaction_id'] . '. Related subscriptions will be cancelled automatically.');
+            if ($result->isSuccessful()) {
+                $this->addFlash('success', 'Refund successful! New Transaction ID: ' . $result->transactionId . '. Related subscriptions will be cancelled automatically.');
                 return $this->redirectToRoute('app_refund');
             } else {
-                $this->addFlash('danger', 'Refund failed: ' . ($result['message'] ?? 'Unknown error'));
+                $this->addFlash('danger', 'Refund failed: ' . ($result->message ?? 'Unknown error'));
                 return $this->redirectToRoute('app_refund');
             }
         }
@@ -229,10 +229,10 @@ class PaymentController extends AbstractController
             transactionId: $request->query->get('transaction-id')
         );
 
-        $transactionData = $this->getTransactionHistoryHandler->handle($getTransactionHistoryQuery);
+        $transactionHistoryResponse = $this->getTransactionHistoryHandler->handle($getTransactionHistoryQuery);
 
         return new Response(
-            json_encode($transactionData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            json_encode($transactionHistoryResponse->transactions, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             Response::HTTP_OK,
             ['Content-Type' => 'application/json'],
         );

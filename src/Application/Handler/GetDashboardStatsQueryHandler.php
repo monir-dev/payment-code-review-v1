@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Query\GetDashboardStatsQuery;
+use App\Application\Response\DashboardStatsData;
+use App\Application\Response\GetDashboardStatsResponse;
 use App\Domain\Payment\ValueObject\PaymentStatus;
 use App\Domain\Subscription\Repository\SubscriptionRepositoryInterface;
 use App\Repository\PaymentTransactionRepository;
@@ -20,7 +22,7 @@ final class GetDashboardStatsQueryHandler
     ) {
     }
 
-    public function handle(GetDashboardStatsQuery $query): array
+    public function handle(GetDashboardStatsQuery $query): GetDashboardStatsResponse
     {
         try {
             // Get basic statistics
@@ -51,19 +53,21 @@ final class GetDashboardStatsQueryHandler
                 status: PaymentStatus::partiallyRefunded()
             );
 
-            return [
-                'stats' => [
-                    'total_subscriptions' => count($allSubscriptions),
-                    'active_subscriptions' => count($activeSubscriptions),
-                    'cancelled_subscriptions' => count($cancelledSubscriptions),
-                    'total_transactions' => count($recentTransactions),
-                    'total_revenue' => $totalRevenue,
-                    'refunded_transactions' => count($refundedTransactions),
-                    'partially_refunded_transactions' => count($partiallyRefundedTransactions),
-                ],
-                'recent_transactions' => $recentTransactions,
-                'active_subscriptions' => array_slice($activeSubscriptions, 0, $query->activeSubscriptionsLimit),
-            ];
+            $stats = new DashboardStatsData(
+                totalSubscriptions: count($allSubscriptions),
+                activeSubscriptions: count($activeSubscriptions),
+                cancelledSubscriptions: count($cancelledSubscriptions),
+                totalTransactions: count($recentTransactions),
+                totalRevenue: $totalRevenue,
+                refundedTransactions: count($refundedTransactions),
+                partiallyRefundedTransactions: count($partiallyRefundedTransactions),
+            );
+
+            return new GetDashboardStatsResponse(
+                stats: $stats,
+                recentTransactions: $recentTransactions,
+                activeSubscriptions: array_slice($activeSubscriptions, 0, $query->activeSubscriptionsLimit),
+            );
 
         } catch (Exception $e) {
             $this->logger->error('Dashboard stats query failed', [

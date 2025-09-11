@@ -58,14 +58,14 @@ final class PlanController extends AbstractController
 
                 $this->addFlash('success', sprintf(
                     'Plan created successfully! Name: %s, Amount: %s',
-                    $result['plan_name'],
-                    $result['amount']
+                    $result->planName,
+                    $result->amount
                 ));
 
                 $this->logger->info('Plan created via DDD', [
-                    'plan_id' => $result['plan_id'],
-                    'plan_name' => $result['plan_name'],
-                    'amount' => $result['amount']
+                    'plan_id' => $result->planId,
+                    'plan_name' => $result->planName,
+                    'amount' => $result->amount
                 ]);
 
                 return $this->redirectToRoute('app_plan_index');
@@ -97,7 +97,7 @@ final class PlanController extends AbstractController
             $result = $this->toggleStatusHandler->handle($command);
 
             // Add success flash message
-            $this->addFlash('success', $result['message']);
+            $this->addFlash('success', $result['message']); // Keep as array for now - we'll update when we refactor TogglePlanStatusCommandHandler
 
             return $this->redirectToRoute('app_plan_index');
 
@@ -133,13 +133,21 @@ final class PlanController extends AbstractController
             $result = $this->createPlanHandler->handle($command);
 
             $this->logger->info('Plan created via API', [
-                'plan_id' => $result['plan_id'],
-                'plan_name' => $result['plan_name']
+                'plan_id' => $result->planId,
+                'plan_name' => $result->planName
             ]);
 
             return new JsonResponse([
                 'success' => true,
-                'plan' => $result
+                'plan' => [
+                    'plan_id' => $result->planId,
+                    'plan_name' => $result->planName,
+                    'amount' => $result->amount,
+                    'frequency' => $result->frequency,
+                    'day_frequency' => $result->dayFrequency,
+                    'status' => $result->status,
+                    'nmi_result' => $result->nmiResult,
+                ]
             ], 201);
 
         } catch (\JsonException $e) {

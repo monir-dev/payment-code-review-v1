@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\CreatePlanCommand;
+use App\Application\Response\CreatePlanCommandResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Billing\Entity\Plan;
 use App\Domain\Billing\Repository\PlanRepositoryInterface;
@@ -21,7 +22,7 @@ final class CreatePlanCommandHandler
     ) {
     }
 
-    public function handle(CreatePlanCommand $command): array
+    public function handle(CreatePlanCommand $command): CreatePlanCommandResponse
     {
         // Create BillingCycle from frequency - this encapsulates the domain logic
         $billingCycle = BillingCycle::fromFrequency($command->frequency);
@@ -47,15 +48,15 @@ final class CreatePlanCommandHandler
         $plan = Plan::create($planIdObject, $command->planName, $money, $billingCycle);
         $this->planRepository->save($plan);
 
-        return [
-            'plan_id' => $plan->getPlanId()->getValue(),
-            'plan_name' => $plan->getName(),
-            'amount' => $plan->getAmount()->format(),
-            'frequency' => $plan->getBillingCycle()->getFrequency(),
-            'day_frequency' => $plan->getBillingCycle()->getDayFrequency(),
-            'status' => $plan->getStatus()->getValue(),
-            'nmi_result' => $nmiResult,
-            'events' => $plan->getUncommittedEvents()
-        ];
+        return new CreatePlanCommandResponse(
+            planId: $plan->getPlanId()->getValue(),
+            planName: $plan->getName(),
+            amount: $plan->getAmount()->format(),
+            frequency: $plan->getBillingCycle()->getFrequency(),
+            dayFrequency: $plan->getBillingCycle()->getDayFrequency(),
+            status: $plan->getStatus()->getValue(),
+            nmiResult: $nmiResult,
+            events: $plan->getUncommittedEvents()
+        );
     }
 }

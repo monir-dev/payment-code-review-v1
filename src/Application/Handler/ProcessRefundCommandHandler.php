@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\ProcessRefundCommand;
+use App\Application\Response\ProcessRefundCommandResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Payment\Event\PaymentRefundedSuccessfullyEvent;
 use App\Domain\Payment\Service\RefundProcessingService;
@@ -29,7 +30,7 @@ final class ProcessRefundCommandHandler
     ) {
     }
 
-    public function handle(ProcessRefundCommand $command): array
+    public function handle(ProcessRefundCommand $command): ProcessRefundCommandResponse
     {
         try {
             // Register event listener if not already registered (to avoid circular dependencies)
@@ -71,17 +72,26 @@ final class ProcessRefundCommandHandler
                 ]);
             }
 
-            return $result;
+            return new ProcessRefundCommandResponse(
+                status: $result['status'],
+                transactionId: $result['transaction_id'] ?? '',
+                refundAmount: $command->refundAmount,
+                originalTransactionId: $command->transactionId,
+                message: $result['message'] ?? null
+            );
         } catch (\Exception $e) {
             $this->logger->error('Refund processing exception', [
                 'original_transaction_id' => $command->transactionId,
                 'error' => $e->getMessage(),
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Failed to process refund: ' . $e->getMessage(),
-            ];
+            return new ProcessRefundCommandResponse(
+                status: 'error',
+                transactionId: '',
+                refundAmount: $command->refundAmount,
+                originalTransactionId: $command->transactionId,
+                message: 'Failed to process refund: ' . $e->getMessage()
+            );
         }
     }
 

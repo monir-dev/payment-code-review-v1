@@ -56,11 +56,10 @@ final class PaymentCompletedEventListener
             $result = $this->createSubscriptionHandler->handle($createSubscriptionCommand);
 
             // Link the initial payment transaction to the newly created subscription
-            $subscriptionId = $result['subscription_id'] ?? null;
-            if ($subscriptionId) {
+            if ($result->subscriptionId) {
                 $this->transactionLinkingService->linkTransactionToSubscription(
                     $event->transactionId,
-                    $subscriptionId
+                    $result->subscriptionId
                 );
             }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\InitializePaymentCommand;
+use App\Application\Response\InitializePaymentCommandResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Shared\ValueObject\Address;
 use App\Domain\Shared\ValueObject\BillingInformation;
@@ -19,7 +20,7 @@ final class InitializePaymentCommandHandler
     ) {
     }
 
-    public function handle(InitializePaymentCommand $command): array
+    public function handle(InitializePaymentCommand $command): InitializePaymentCommandResponse
     {
         try {
             // Create BillingInformation value object
@@ -64,7 +65,13 @@ final class InitializePaymentCommandHandler
                 ]);
             }
 
-            return $result;
+            return new InitializePaymentCommandResponse(
+                status: $result['status'],
+                redirectUrl: $result['redirect_url'] ?? null,
+                tokenId: $result['token_id'] ?? null,
+                message: $result['message'] ?? null,
+                gatewayResponse: $result
+            );
         } catch (\Exception $e) {
             $this->logger->error('Payment initialization exception', [
                 'error' => $e->getMessage(),
@@ -72,10 +79,10 @@ final class InitializePaymentCommandHandler
                 'customer_email' => $command->billingEmail
             ]);
 
-            return [
-                'status' => 'error',
-                'message' => 'Failed to initialize payment: ' . $e->getMessage()
-            ];
+            return new InitializePaymentCommandResponse(
+                status: 'error',
+                message: 'Failed to initialize payment: ' . $e->getMessage()
+            );
         }
     }
 }

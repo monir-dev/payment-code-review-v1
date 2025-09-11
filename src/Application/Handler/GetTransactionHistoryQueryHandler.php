@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Query\GetTransactionHistoryQuery;
+use App\Application\Response\GetTransactionHistoryResponse;
 use App\Repository\PaymentTransactionRepository;
 use Exception;
 use Psr\Log\LoggerInterface;
@@ -17,7 +18,7 @@ final class GetTransactionHistoryQueryHandler
     ) {
     }
 
-    public function handle(GetTransactionHistoryQuery $query): array
+    public function handle(GetTransactionHistoryQuery $query): GetTransactionHistoryResponse
     {
         try {
             // Get transactions based on query filters
@@ -42,7 +43,10 @@ final class GetTransactionHistoryQueryHandler
                 ];
             }
 
-            return $transactionData;
+            return new GetTransactionHistoryResponse(
+                transactions: $transactionData,
+                totalCount: count($transactionData),
+            );
 
         } catch (Exception $e) {
             $this->logger->error('Transaction history query failed', [

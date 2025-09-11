@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\CreateSubscriptionCommand;
+use App\Application\Response\CreateSubscriptionCommandResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Billing\Repository\PlanRepositoryInterface;
 use App\Domain\Billing\ValueObject\PlanId;
@@ -26,7 +27,7 @@ final class CreateSubscriptionCommandHandler
     ) {
     }
 
-    public function handle(CreateSubscriptionCommand $command): array
+    public function handle(CreateSubscriptionCommand $command): CreateSubscriptionCommandResponse
     {
         $planId = PlanId::fromString($command->planId);
         $plan = $this->planRepository->findByPlanId($planId);
@@ -133,17 +134,18 @@ final class CreateSubscriptionCommandHandler
         $this->subscriptionRepository->save($subscription);
 
         // Return result
-        return [
-            'subscription_id' => $subscription->getSubscriptionId()->getValue(),
-            'customer_vault_id' => $customerVaultId,
-            'nmi_transaction_id' => $nmiResult['transaction_id'] ?? null,
-            'plan_name' => $subscription->getPlan()->getName(),
-            'amount' => $subscription->getAmount()->format(),
-            'start_date' => $subscription->getStartDate()->format('Y-m-d'),
-            'next_charge_date' => $subscription->getNextChargeDate()->format('Y-m-d'),
-            'status' => $subscription->getStatus()->getValue(),
-            'message' => 'Subscription created successfully with NMI',
-            'events' => $subscription->getUncommittedEvents()
-        ];
+        return new CreateSubscriptionCommandResponse(
+            subscriptionId: $subscription->getSubscriptionId()->getValue(),
+            status: $subscription->getStatus()->getValue(),
+            customerVaultId: $customerVaultId,
+            customerEmail: $subscription->getBillingInformation()->getEmail()->getValue(),
+            planId: $subscription->getPlan()->getPlanId()->getValue(),
+            planName: $subscription->getPlan()->getName(),
+            amount: $subscription->getAmount()->getAmount(),
+            frequency: $subscription->getPlan()->getBillingCycle()->getFrequency(),
+            startDate: $subscription->getStartDate()->format('Y-m-d'),
+            nextChargeDate: $subscription->getNextChargeDate()->format('Y-m-d'),
+            events: $subscription->getUncommittedEvents()
+        );
     }
 }

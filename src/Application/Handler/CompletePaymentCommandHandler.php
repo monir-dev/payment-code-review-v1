@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\CompletePaymentCommand;
+use App\Application\Response\CompletePaymentCommandResponse;
 use App\Domain\Payment\Event\PaymentCompletedSuccessfullyEvent;
 use App\Infrastructure\Event\DomainEventBus;
 use App\Infrastructure\Event\EventListenerRegistry;
@@ -24,7 +25,7 @@ final class CompletePaymentCommandHandler
     ) {
     }
 
-    public function handle(CompletePaymentCommand $command): array
+    public function handle(CompletePaymentCommand $command): CompletePaymentCommandResponse
     {
         try {
             // Register event listener if not already registered (to avoid circular dependencies)
@@ -61,16 +62,23 @@ final class CompletePaymentCommandHandler
                 ]);
             }
 
-            return $result;
+            return new CompletePaymentCommandResponse(
+                status: $result['status'],
+                transactionId: $result['transaction_id'] ?? '',
+                message: $result['message'] ?? null,
+                declineMessage: $result['decline_message'] ?? null,
+                errorMessage: $result['error_message'] ?? null
+            );
         } catch (\Exception $e) {
             $this->logger->error('Payment completion exception', [
                 'error' => $e->getMessage()
             ]);
 
-            return [
-                'status' => 'error',
-                'error_message' => 'Failed to complete payment: ' . $e->getMessage()
-            ];
+            return new CompletePaymentCommandResponse(
+                status: 'error',
+                transactionId: '',
+                errorMessage: 'Failed to complete payment: ' . $e->getMessage()
+            );
         }
     }
 

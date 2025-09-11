@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Application\Handler;
 
 use App\Application\Command\CancelSubscriptionCommand;
+use App\Application\Response\CancelSubscriptionCommandResponse;
 use App\Application\Service\PaymentGatewayInterface;
 use App\Domain\Subscription\Repository\SubscriptionRepositoryInterface;
 use App\Domain\Subscription\ValueObject\SubscriptionId;
+use DateTimeImmutable;
 use DomainException;
 use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
@@ -21,7 +23,7 @@ final class CancelSubscriptionCommandHandler
     ) {
     }
 
-    public function handle(CancelSubscriptionCommand $command): array
+    public function handle(CancelSubscriptionCommand $command): CancelSubscriptionCommandResponse
     {
         try {
             // 1. Validate and fetch the subscription using domain value object
@@ -69,7 +71,7 @@ final class CancelSubscriptionCommandHandler
                 'subscription_id' => $subscription->getSubscriptionId()->getValue(),
                 'status' => $subscription->getStatus()->getValue(),
                 'reason' => $command->reason,
-                'cancelled_at' => (new \DateTimeImmutable())->format('c'),
+                'cancelled_at' => (new DateTimeImmutable())->format('c'),
                 'gateway_cancelled' => $command->cancelWithGateway,
                 'events' => [] // Domain events will be handled by event listeners
             ];
@@ -89,7 +91,17 @@ final class CancelSubscriptionCommandHandler
                 'cancelled_by' => $command->cancelledBy
             ]);
 
-            return $result;
+            return new CancelSubscriptionCommandResponse(
+                subscriptionId: $subscription->getSubscriptionId()->getValue(),
+                originalStatus: 'active', // We know it was active since cancellation succeeded
+                newStatus: $subscription->getStatus()->getValue(),
+                reason: $command->reason,
+                cancelledBy: $command->cancelledBy ?? 'Unknown',
+                cancelledAt: (new DateTimeImmutable())->format('c'),
+                gatewayProcessed: $command->cancelWithGateway,
+                gatewayResult: $gatewayResult,
+                events: []
+            );
 
         } catch (DomainException $e) {
             // Domain validation failed (e.g., subscription already cancelled)

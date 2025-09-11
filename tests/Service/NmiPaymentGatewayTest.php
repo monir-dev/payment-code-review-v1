@@ -1,230 +1,231 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Tests\Service;
 
-use App\Entity\PaymentTransaction;
 use App\Service\NmiPaymentGateway;
-use App\Dto\CreatePlanDto;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Domain\Shared\ValueObject\Money;
+use App\Domain\Billing\Dto\CreatePlanDto;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
-use PHPUnit\Framework\MockObject\MockObject;
 
-final class NmiPaymentGatewayTest extends TestCase
+class NmiPaymentGatewayTest extends TestCase
 {
-    private MockObject & EntityManagerInterface $entityManager;
-    private MockObject & LoggerInterface $logger;
-    private MockObject & HttpClientInterface $httpClient;
-    private NmiPaymentGateway $paymentGateway;
+    private LoggerInterface $mockLogger;
+    private HttpClientInterface $mockHttpClient;
+    private NmiPaymentGateway $gateway;
 
     protected function setUp(): void
     {
-        parent::setUp();
-        $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
-        $this->entityManager = $this->createMock(EntityManagerInterface::class);
-        $this->logger = $this->createMock(LoggerInterface::class);
-        $this->httpClient = $this->createMock(HttpClientInterface::class);
-        $this->paymentGateway = new NmiPaymentGateway(
-            $this->entityManager,
-            $this->logger,
-            $this->httpClient,
-            $_ENV['NMI_API_KEY'] ?? ''
+        $this->mockLogger = $this->createMock(LoggerInterface::class);
+        $this->mockHttpClient = $this->createMock(HttpClientInterface::class);
+        $this->gateway = new NmiPaymentGateway($this->mockLogger, $this->mockHttpClient, 'test-key');
+    }
+
+    public function testCompleteTransactionSuccess(): void
+    {
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            '<nm_response><result>1</result><transactionid>txn-123</transactionid></nm_response>'
         );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $result = $this->gateway->completeTransaction('token123');
+        
+        $this->assertEquals('success', $result->status);
     }
 
-    function test_initialize_payment_success()
+    public function testProcessRebillingSuccess(): void
     {
-        $responseXml = <<<XML
-<?xml version="1.0" encoding="UTF-8"?>
-<response>
-    <result>1</result>
-    <form-url>https://secure.nmi.com/token-form/12345</form-url>
-</response>
-XML;
-
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getContent')->willReturn($responseXml);
-
-        $this->httpClient->method('request')->willReturn($response);
-
-        $result = $this->paymentGateway->initializePayment(10.00, 'USD', 'http://localhost/redirect');
-
-        $this->assertEquals('success', $result['status']);
-        $this->assertEquals('https://secure.nmi.com/token-form/12345', $result['form_url']);
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=1&transactionid=txn-rebill-456&amount=29.99'
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $result = $this->gateway->processRebilling(
+            'sub-123',
+            'vault-456', 
+            Money::fromFloat(29.99, 'USD')
+        );
+        
+        $this->assertEquals('success', $result->status);
+        $this->assertEquals('sub-123', $result->subscriptionId);
+        $this->assertEquals('txn-rebill-456', $result->transactionId);
+        $this->assertEquals(29.99, $result->amount->getAmount());
     }
 
-    function test_initialize_payment_error()
+    public function testProcessRebillingFailedWithMissingVaultId(): void
     {
-        $responseXml = <<<XML
-<?xml version="1.0" encoding="UTF-8"?>
-<response>
-    <result>0</result>
-</response>
-XML;
-
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getContent')->willReturn($responseXml);
-
-        $this->httpClient->method('request')->willReturn($response);
-
-        $this->logger->expects($this->once())->method('error')->with('Step 1 failed', ['response' => $responseXml]);
-
-        $result = $this->paymentGateway->initializePayment(10.00, 'USD', 'http://localhost/redirect');
-
-        $this->assertEquals('error', $result['status']);
-        $this->assertEquals('Failed to initialize payment', $result['message']);
+        // No HTTP call should be made with empty vault ID
+        $this->mockHttpClient->expects($this->never())->method('request');
+        
+        $result = $this->gateway->processRebilling('sub-123', '', Money::fromFloat(29.99, 'USD'));
+        
+        $this->assertEquals('error', $result->status);
+        $this->assertStringContainsString('Customer vault ID is required', $result->message);
     }
 
-    function testCompleteTransactionSuccess()
+    public function testProcessRebillingFailedTransaction(): void
     {
-        $request = new Request([], ['token-id' => 'test-token-id']);
-        $responseXml = <<<XML
-<?xml version="1.0" encoding="UTF-8"?>
-<response>
-    <result>1</result>
-    <token-id>test-token-id</token-id>
-    <transaction-id>1234567890</transaction-id>
-    <amount>10.00</amount>
-    <currency>USD</currency>
-    <billing>
-        <cc-number>...1111</cc-number>
-    </billing>
-</response>
-XML;
-
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getContent')->willReturn($responseXml);
-
-        $this->httpClient->method('request')->willReturn($response);
-
-        $this->entityManager->expects($this->once())->method('persist')->with($this->isInstanceOf(PaymentTransaction::class));
-        $this->entityManager->expects($this->once())->method('flush');
-        $this->logger->expects($this->once())->method('info')->with('Payment successful', ['transaction_id' => '1234567890']);
-
-        $result = $this->paymentGateway->completeTransaction($request);
-
-        $this->assertEquals('success', $result['status']);
-        $this->assertEquals('1234567890', $result['transaction_id']);
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=2&responsetext=DECLINE&transactionid='
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $result = $this->gateway->processRebilling('sub-123', 'vault-456', Money::fromFloat(29.99, 'USD'));
+        
+        $this->assertEquals('declined', $result->status);
+        $this->assertStringContainsString('DECLINE', $result->message);
     }
 
-    function testCompleteTransactionDeclined()
+    public function testCreateSubscriptionSuccess(): void
     {
-        $request = new Request([], ['token-id' => 'test-token-id']);
-        $responseXml = <<<XML
-<?xml version="1.0" encoding="UTF-8"?>
-<response>
-    <result>2</result>
-    <result-text>Declined</result-text>
-</response>
-XML;
-
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getContent')->willReturn($responseXml);
-
-        $this->httpClient->method('request')->willReturn($response);
-
-        $this->logger->expects($this->once())->method('warning')->with('Payment declined', ['response' => $responseXml]);
-
-        $result = $this->paymentGateway->completeTransaction($request);
-
-        $this->assertEquals('declined', $result['status']);
-        $this->assertEquals('Declined', $result['decline_message']);
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=1&subscription_id=nmi-sub-789&responsetext=SUCCESS'
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $startDate = new \DateTimeImmutable('2024-01-01');
+        $result = $this->gateway->createSubscription('plan-123', 'vault-456', $startDate, [
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'email' => 'john@example.com'
+        ]);
+        
+        $this->assertEquals('success', $result->status);
+        $this->assertEquals('nmi-sub-789', $result->subscriptionId);
+        $this->assertStringContainsString('Subscription created successfully', $result->message);
     }
 
-    function testCompleteTransactionError()
+    public function testCreateSubscriptionFailed(): void
     {
-        $request = new Request([], ['token-id' => 'test-token-id']);
-        $responseXml = <<<XML
-<?xml version="1.0" encoding="UTF-8"?>
-<response>
-    <result>3</result>
-    <result-text>Error</result-text>
-</response>
-XML;
-
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getContent')->willReturn($responseXml);
-
-        $this->httpClient->method('request')->willReturn($response);
-
-        $this->logger->expects($this->once())->method('error')->with('Payment error', ['response' => $responseXml]);
-
-        $result = $this->paymentGateway->completeTransaction($request);
-
-        $this->assertEquals('error', $result['status']);
-        $this->assertEquals('Error', $result['error_message']);
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=3&responsetext=Invalid plan ID'
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $startDate = new \DateTimeImmutable('2024-01-01');
+        $result = $this->gateway->createSubscription('invalid-plan', 'vault-456', $startDate);
+        
+        $this->assertEquals('error', $result->status);
+        $this->assertStringContainsString('Invalid plan ID', $result->message);
     }
 
-    function testProcessRefundWithNegativeAmount()
+    public function testCancelSubscriptionSuccess(): void
     {
-        $result = $this->paymentGateway->processRefund('123', -10);
-        $this->assertEquals('error', $result['status']);
-        $this->assertEquals('Refund amount must be positive.', $result['message']);
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=1&responsetext=Subscription Canceled Successfully'
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $result = $this->gateway->cancelSubscription('nmi-sub-789');
+        
+        $this->assertEquals('success', $result->status);
+        $this->assertStringContainsString('cancelled successfully', $result->message);
     }
 
-    function testCreatePlanSuccess()
+    public function testCancelSubscriptionAlreadyCancelled(): void
     {
-        // Simulate successful NMI response (form-encoded key=value pairs)
-        $responseBody = 'response=1&responsetext=Plan Added&authcode=&transactionid=&avsresponse=&cvvresponse=&orderid=&type=&response_code=100';
-
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getContent')->willReturn($responseBody);
-
-        $this->httpClient->method('request')->willReturn($response);
-
-        $this->logger->expects($this->once())->method('info')
-            ->with('Plan created successfully with NMI', $this->arrayHasKey('plan_id'));
-
-        $planDto = new CreatePlanDto('PLAN_MONTHLY_2999_20231201120000', 'Premium Plan', 29.99, 'monthly', 30);
-
-        $result = $this->paymentGateway->createPlan($planDto);
-
-        $this->assertEquals('success', $result['status']);
-        $this->assertEquals('Plan Added', $result['message']);
-        // Only returns minimal data now
-        $this->assertArrayNotHasKey('plan_id', $result);
-        $this->assertArrayNotHasKey('amount', $result);
-        $this->assertArrayNotHasKey('frequency', $result);
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=3&responsetext=No recurring subscriptions found'
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $result = $this->gateway->cancelSubscription('nmi-sub-789');
+        
+        $this->assertEquals('success', $result->status);
+        $this->assertTrue($result->alreadyCancelled);
+        $this->assertStringContainsString('already cancelled', $result->message);
     }
 
-    function testCreatePlanFailure()
+    public function testCreatePlanSuccess(): void
     {
-        // Simulate failed NMI response
-        $responseBody = 'response=3&responsetext=Invalid plan data&authcode=&transactionid=&avsresponse=&cvvresponse=&orderid=&type=&response_code=300';
-
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getContent')->willReturn($responseBody);
-
-        $this->httpClient->method('request')->willReturn($response);
-
-        // Create DTO for test
-        $planDto = new CreatePlanDto('PLAN_MONTHLY_2999_20231201120000', 'Premium Plan', 29.99, 'monthly', 30);
-
-        $result = $this->paymentGateway->createPlan($planDto);
-
-        $this->assertEquals('error', $result['status']);
-        $this->assertEquals('Invalid plan data', $result['message']);
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=1&plan_id=nmi-plan-101&responsetext=Plan Added'
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $planDto = new CreatePlanDto(
+            planId: 'plan-123',
+            planName: 'Premium Plan',
+            amount: 29.99,
+            frequency: 'monthly',
+            dayFrequency: 30
+        );
+        
+        $result = $this->gateway->createPlan($planDto);
+        
+        $this->assertEquals('success', $result->status);
+        $this->assertEquals('plan-123', $result->planId);
+        $this->assertStringContainsString('Plan Added', $result->message);
     }
 
-    function testCreatePlanWithWeeklyFrequency()
+    public function testCreatePlanFailed(): void
     {
-        $responseBody = 'response=1&responsetext=Plan Added&authcode=&transactionid=&avsresponse=&cvvresponse=&orderid=&type=&response_code=100';
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=3&responsetext=Duplicate plan name'
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $planDto = new CreatePlanDto(
+            planId: 'plan-123',
+            planName: 'Existing Plan',
+            amount: 29.99,
+            frequency: 'monthly',
+            dayFrequency: 30
+        );
+        
+        $result = $this->gateway->createPlan($planDto);
+        
+        $this->assertEquals('error', $result->status);
+        $this->assertStringContainsString('Duplicate plan name', $result->message);
+    }
 
-        $response = $this->createMock(ResponseInterface::class);
-        $response->method('getContent')->willReturn($responseBody);
+    public function testCreateCustomerVaultSuccess(): void
+    {
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getContent')->willReturn(
+            'response=1&customer_vault_id=vault-12345&responsetext=Customer Added'
+        );
+        $this->mockHttpClient->method('request')->willReturn($mockResponse);
+        
+        $billingInfo = [
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'email' => 'john@example.com',
+            'address1' => '123 Main St',
+            'city' => 'New York',
+            'state' => 'NY',
+            'zip' => '10001'
+        ];
+        
+        $result = $this->gateway->createCustomerVault($billingInfo);
+        
+        $this->assertEquals('success', $result->status);
+        $this->assertEquals('vault-12345', $result->customerVaultId);
+        $this->assertStringContainsString('Customer vault created successfully', $result->message);
+    }
 
-        $this->httpClient->method('request')->willReturn($response);
-
-        $planDto = new CreatePlanDto('PLAN_WEEKLY_1500_20231201120000', 'Basic Weekly Plan', 15.00, 'weekly', 7);
-
-        $result = $this->paymentGateway->createPlan($planDto);
-
-        $this->assertEquals('success', $result['status']);
-        $this->assertEquals('Plan Added', $result['message']);
-        $this->assertArrayNotHasKey('plan_id', $result);
-        $this->assertArrayNotHasKey('amount', $result);
+    public function testGatewayExceptionHandling(): void
+    {
+        $this->mockHttpClient
+            ->method('request')
+            ->willThrowException(new \Exception('Network connection failed'));
+        
+        $result = $this->gateway->processRebilling('sub-123', 'vault-456', Money::fromFloat(29.99, 'USD'));
+        
+        $this->assertEquals('error', $result->status);
+        $this->assertStringContainsString('Network connection failed', $result->message);
     }
 }

@@ -8,11 +8,13 @@ use InvalidArgumentException;
 
 final class PaymentStatus
 {
+    private const PENDING = 'pending';
     private const APPROVED = 'approved';
     private const REFUNDED = 'refunded';
     private const PARTIALLY_REFUNDED = 'partially_refunded';
 
     private const VALID_STATUSES = [
+        self::PENDING,
         self::APPROVED,
         self::REFUNDED,
         self::PARTIALLY_REFUNDED,
@@ -26,11 +28,15 @@ final class PaymentStatus
         }
     }
 
+    public static function pending(): self
+    {
+        return new self(self::PENDING);
+    }
+
     public static function approved(): self
     {
         return new self(self::APPROVED);
     }
-
 
     public static function refunded(): self
     {
@@ -50,6 +56,11 @@ final class PaymentStatus
     public function getValue(): string
     {
         return $this->status;
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::PENDING;
     }
 
     public function isApproved(): bool
